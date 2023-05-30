@@ -1,0 +1,14 @@
+xgboost==0.90
+numpy==1.22.4
+pypinyin==0.42.0
+tqdm==4.36.1
+Unidecode==1.2.0
+pyjarowinkler==1.8
+lightgbm==2.3.0
+scipy==1.9.0
+torch==1.7.1
+gensim==3.8.3
+cogdl==0.5.3
+catboost==0.24.4
+scikit_learn==1.1.2
+pinyin==0.4.0

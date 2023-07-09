@@ -23,7 +23,6 @@ Generating bert_simi_feature consists of two steps:
 2, Calculating the bert_simi_feature.
 '''
 
-
 class ProcessFeature:
     def __init__(self, nameAidPid_path, prosInfo_path, unassCandi_path, validUnassPub_path):
 
@@ -38,6 +37,7 @@ class ProcessFeature:
 
         with open(validUnassPub_path, 'r') as files:
             self.validUnassPub = json.load(files)
+
         if debug_mod:
             self.unassCandi = self.unassCandi[:5]
 
@@ -363,8 +363,8 @@ class OagbertFeatures:
 
         self.name = self.v2path['name']
         self.task = self.v2path['task']  # RND SND
-        assert self.task == 'RND', 'This features' \
-                                   'only support RND task'
+        assert self.task == 'RND', 'Only support RND task'
+
         self.type = self.v2path['type']  # train valid test
 
         # Modifying arguments when calling from outside
@@ -377,7 +377,7 @@ class OagbertFeatures:
 
         if self.type == 'train':
             self.config = {
-                "nameAidPid_path": self.processed_data_root + RNDFilePathConfig.train_name2aid2pid_4train_bert_smi,
+                "nameAidPid_path": self.processed_data_root + 'train/offline_profile.json',
                 "prosInfo_path": self.raw_data_root + RNDFilePathConfig.train_pubs,
                 "unassCandi_path": self.processed_data_root + RNDFilePathConfig.unass_candi_offline_path,
                 "validUnassPub_path": self.raw_data_root + RNDFilePathConfig.train_pubs,

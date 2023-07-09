@@ -123,11 +123,14 @@ class FeatDataLoader:
         self.hand_dict = load_pickle(feat_config['hand_path'])
         self.bert_dict = None
 
+        self.graph_path = feat_config['graph_path']
+        self.graph_dict = None
 
     def update_feat(self, feat_list):
         if 'bert' in feat_list and self.bert_dict is None:
             self.bert_dict = load_pickle(self.bert_path)
-
+        if 'graph' in feat_list and self.graph_dict is None:
+            self.graph_dict = load_pickle(self.graph_path)
 
     def get_whole_feat(self, unass_pid, candi_aid, feat_list):
         hand_feat = self.hand_dict[unass_pid][candi_aid]
@@ -135,6 +138,10 @@ class FeatDataLoader:
             whole_feature = np.hstack([self.bert_dict[unass_pid][candi_aid], hand_feat])
         else:
             whole_feature = np.array(hand_feat)
+
+        if 'graph' in feat_list:
+            whole_feature = np.hstack([self.graph_dict[unass_pid][candi_aid],whole_feature])
+
         return whole_feature
 
 
@@ -248,7 +255,7 @@ class CellModel:
                     else:
                         step_two_train_x = np.vstack([step_two_train_x, step_two_feat])
                 del tmp_dev_ins
-        # 产生验证集第二阶段使用数据
+
         if self.has_lv2:
             step_two_train_x = np.array(step_two_train_x)
             step_two_train_y = np.array(step_two_train_y)
@@ -256,8 +263,8 @@ class CellModel:
             self.fit(step_two_train_x, step_two_train_y, training_type='lv2')
 
     def get_lv2_feat(self, candis_feature, fold_i):
-        # 获取用于二阶段预测和训练的特征, 传入当前文章所有候选作者拼成的表征
-        assert self.has_lv2, '有二阶段时才能调用此函数'
+
+        assert self.has_lv2, 'FOR NIL'
         candi_num = len(candis_feature)
         assert candi_num > 0
         lv1_preds_all = self._get_lv1_preds(candis_feature, fold_i)  # [candi_num, lv_1_model_num]
@@ -285,7 +292,6 @@ class CellModel:
         return candis_feature
 
     def predict(self, candis_feature):
-        ''' 传入所有候选者的表征 '''
         # candis_feature = np.array(candis_feature)
         if self.has_lv2:
             lv2_feat_all = []
@@ -321,6 +327,7 @@ class GBDTModel:
     def __init__(self,
                  train_config_list,
                  model_save_dir,
+                 graph_data=False,
                  debug=False):
         self.train_config_list = train_config_list # k fold train data
         self.model_save_dir = model_save_dir
@@ -549,7 +556,26 @@ class GBDTModel:
             ],
         },
     ]
-
+        if graph_data : #Only train one catboost
+            self.cell_list_config = []
+            self.cell_list_config.append(
+                {
+                    'cell_weight': 5,
+                    'score': 0.0,
+                    'feature_list': ['graph'],
+                    'vote_type': 'mean',
+                    'model': [
+                        [
+                            {
+                                'gbd_type': 'cat',
+                                'params': {'verbose': False}
+                            }
+                        ],
+                        [
+                        ]
+                    ],
+                }
+            )
         self.cell_weight_sum = 0
         for cell_config in self.cell_list_config:
             self.cell_weight_sum += cell_config['cell_weight']
@@ -568,7 +594,7 @@ class GBDTModel:
         ''' train GBDT model'''
         os.makedirs(self.model_save_dir, exist_ok=True)
 
-        train_feat_data = FeatDataLoader(train_feature_config)
+        train_feat_data = FeatDataLoader(train_feature_config) #train set feature
         cell_model_list = []
         for cell_i, cell_config in enumerate(self.cell_list_config):
             # 先训练每个cell

@@ -2,7 +2,11 @@ import json
 import os
 import pickle
 import logging
+import random
 
+import torch
+import numpy as np
+from collections import Counter,defaultdict
 from whoiswho.character.name_match.tool.is_chinese import cleaning_name
 
 dname_l_dict = {}
@@ -12,6 +16,11 @@ def set_log(log_dir, log_time):
     logging.basicConfig(format="%(asctime)s - %(levelname)s - %(name)s - %(message)s", datefmt="%m/%d %H:%M:%S",
                         level=logging.INFO, filemode='w', filename=f'{log_dir}/{log_time}.log')
 
+def set_seed(seed=1):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
 
 def load_json(*paths):
     if len(paths) > 1:
@@ -30,6 +39,14 @@ def load_pickle(*paths):
     with open(path, 'rb') as f:
         return pickle.load(f)
 
+def read_txt(file):
+    data = []
+    f = open(file)
+    lines = f.readlines()
+    for line in lines:
+        data.append(line.rstrip('\n'))
+    f.close()
+    return data
 
 def save_json(data, *paths, ensure_ascii=False):
     if len(paths) > 1:
@@ -51,6 +68,39 @@ def save_pickle(data, *paths):
     with open(path, 'wb') as f:
         pickle.dump(data, f)
 
+def save_txt(data,file):
+    f = open(file, 'w', encoding='utf-8')
+    for i in list(data):
+        f.writelines(i + '\n')
+    f.close()
+
+def numpy_dict_load(file):
+    dict1 = np.load(file, allow_pickle=True).item()
+    return  dict1
+
+def nodename2index(all_dict):
+    index = list(range(len(all_dict)))
+    nodename2index = dict(zip(all_dict.keys(), index))
+
+    return nodename2index
+
+def double_map(node2index,emb):
+    '''
+    按照0到length的索引 级联所有向量
+    :param indexfile:
+    :return:
+    '''
+    #node2index中value 从0到length
+    if isinstance(node2index,str):
+        node2index = load_json(node2index)
+    if isinstance(emb,str):
+        emb = np.load(emb, allow_pickle=True).item()
+    index2node = list(node2index.keys()) #天然index
+
+    result = [ emb[i] for i in index2node]
+    result =np.array(result).reshape(len(result),-1)
+
+    return result #重新排序的emb
 
 def get_author_index(name, dnames, l_must_in_r=False):
     '''获取 name 在 dnames 中的序号

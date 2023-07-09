@@ -11,13 +11,14 @@ def version2path(version: dict) -> dict:
     Map the dataset information to the corresponding path
     """
     name, task, type = list(version.values())
-    print(os.path.abspath(dirname(__file__)))
+    # print(os.path.abspath(dirname(__file__)))
     data_root =  join(os.path.abspath(dirname(__file__)), f'dataset/data/',name, task,'')
     feat_root = join(os.path.abspath(dirname(__file__)), f'featureGenerator/feat/',name, task,'')
 
     #data
     raw_data_root = data_root
     processed_data_root = os.path.join(data_root, 'processed_data/')
+    whoiswhograph_data_root =  os.path.join(data_root, 'graph_data/')
     whoiswhograph_extend_processed_data = os.path.join(data_root,'whoiswhograph_extend_processed_data/')
 
     #feat
@@ -31,6 +32,7 @@ def version2path(version: dict) -> dict:
         'type': type,
         'raw_data_root': raw_data_root,
         'processed_data_root': processed_data_root,
+        'graph_data_root': whoiswhograph_data_root,
         'whoiswhograph_extend_processed_data': whoiswhograph_extend_processed_data,
         'hand_feat_root': hand_feat_root,
         'bert_feat_root': bert_feat_root,
@@ -42,6 +44,8 @@ paper_idf_path =  join(os.path.abspath(dirname(__file__)), 'saved/paper-tf-idf/'
 snd_embs_path  =  join(os.path.abspath(dirname(__file__)), 'saved/snd-embs/')
 pretrained_oagbert_path = join(os.path.abspath(dirname(__file__)), 'saved/oagbert-v2-sim/')
 pretrained_word2vec_path = join(os.path.abspath(dirname(__file__)), 'saved/word2vec/')
+uuid_path = join(os.path.abspath(dirname(__file__)),'saved/used_uuid_v3+v4.json')
+
 configs = {
 
     "train_neg_sample"              : 19,
@@ -80,20 +84,17 @@ class RNDFilePathConfig:
     # offline data
     train_name2aid2pid = "train/train_author.json"
     train_pubs = "train/train_pub.json"
-    train_name2aid2pid_4train_bert_smi = "train/offline_profile.json"
+
     # valid
     database_name2aid2pid = "valid/whole_author_profiles.json"
     database_pubs = "valid/whole_author_profiles_pub.json"
 
-    # train+valid所有已有的 name2aid2pid 信息
-    # get_name2aid2pid方法使用
+    # train+valid  data_process.py  get_name2aid2pid
     whole_name2aid2pid = 'database/name2aid2pid.whole.json'
     whole_pubsinfo = 'database/pubs.info.json'
 
     unass_candi_offline_path = 'train/unass_candi.whole.json'
-
     unass_candi_v1_path = 'onlinev1/unass_candi.json'
-
     unass_candi_v2_path = 'onlinev2/unass_candi.json'
 
     unass_pubs_info_v1_path = 'valid/cna_valid_unass_pub.json'

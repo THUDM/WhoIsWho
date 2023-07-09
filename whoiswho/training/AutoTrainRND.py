@@ -82,7 +82,7 @@ def test_config2data(test_config,debug_mod=False):
 
 
 class RNDTrainer:
-    def __init__(self, version, debug=False ,processed_data_root = None, hand_feat_root=None, bert_feat_root=None):
+    def __init__(self, version, debug=False ,processed_data_root = None, hand_feat_root=None, bert_feat_root=None, graph_data=False):
         self.v2path = version2path(version)
         self.name = self.v2path['name']
         self.task = self.v2path['task']  # RND SND
@@ -105,7 +105,7 @@ class RNDTrainer:
 
         print(f'processed_data_root: {self.processed_data_root}\nhand_feat_root: {self.hand_feat_root}\nbert_feat_root: {self.bert_feat_root}\n ')
 
-        # The train data configuration, which is related to the instantiation of GBDTModel
+        # The train data configuration, which is related to create GBDT models
         self.train_config_list = [
         {
             'train_path': self.processed_data_root + "/train/kfold_dataset/kfold_v1/train_ins.json",
@@ -150,11 +150,62 @@ class RNDTrainer:
             'unass_path': self.processed_data_root + RNDFilePathConfig.unass_candi_v2_path,
             'name2aid2pid': self.processed_data_root + RNDFilePathConfig.whole_name2aid2pid,
         }
+
+        if graph_data == True:
+            self.whoiswhograph_extend_processed_data = self.v2path['whoiswhograph_extend_processed_data']
+            self.graph_feat_root = self.v2path['graph_feat_root']
+            self.train_config_list = [
+                {
+                    'train_path': self.whoiswhograph_extend_processed_data + "/train/kfold_dataset/kfold_v1/train_ins.json",
+                    'dev_path': self.whoiswhograph_extend_processed_data + "/train/kfold_dataset/kfold_v1/test_ins.json",
+                },
+                {
+                    'train_path': self.whoiswhograph_extend_processed_data + "/train/kfold_dataset/kfold_v2/train_ins.json",
+                    'dev_path': self.whoiswhograph_extend_processed_data + "/train/kfold_dataset/kfold_v2/test_ins.json",
+                },
+                {
+                    'train_path': self.whoiswhograph_extend_processed_data + "/train/kfold_dataset/kfold_v3/train_ins.json",
+                    'dev_path': self.whoiswhograph_extend_processed_data + "/train/kfold_dataset/kfold_v3/test_ins.json",
+                },
+                {
+                    'train_path': self.whoiswhograph_extend_processed_data + "/train/kfold_dataset/kfold_v4/train_ins.json",
+                    'dev_path': self.whoiswhograph_extend_processed_data + "/train/kfold_dataset/kfold_v4/test_ins.json",
+                },
+                {
+                    'train_path': self.whoiswhograph_extend_processed_data + "/train/kfold_dataset/kfold_v5/train_ins.json",
+                    'dev_path': self.whoiswhograph_extend_processed_data + "/train/kfold_dataset/kfold_v5/test_ins.json",
+                },
+            ]
+
+            # train feature
+            self.train_feature_config = {
+                'hand_path': self.hand_feat_root + 'whoiswhograph_pid2aid2hand_feat.offline.pkl',
+                'graph_path': self.graph_feat_root + 'pid2aid2graph_feat_gat.offline.pkl',
+            }
+            # valid set and test set config
+            self.test_config_v1 = {
+                'hand_path': self.hand_feat_root + 'pid2aid2hand_feat.onlinev1.pkl',
+                'graph_path': self.graph_feat_root + 'pid2aid2graph_feat_gat.onlinev1.pkl',
+                'unass_path': self.whoiswhograph_extend_processed_data + RNDFilePathConfig.unass_candi_v1_path,
+                'name2aid2pid': self.processed_data_root + RNDFilePathConfig.whole_name2aid2pid,
+            }
+            self.test_config_v2 = {
+                'hand_path': self.hand_feat_root + 'pid2aid2hand_feat.onlinev2.pkl',
+                'graph_path': self.graph_feat_root + 'pid2aid2graph_feat_gat.onlinev2.pkl',
+                'unass_path': self.whoiswhograph_extend_processed_data + RNDFilePathConfig.unass_candi_v2_path,
+                'name2aid2pid': self.processed_data_root + RNDFilePathConfig.whole_name2aid2pid,
+            }
+
+
         # model_save_dir
-        model_save_dir = f'./whoiswho/training/{self.task}_save_model'
+        if graph_data:
+            model_save_dir = f'./whoiswho/training/{self.task}_graph_save_model'
+        else:
+            model_save_dir = f'./whoiswho/training/{self.task}_save_model'
         os.makedirs(model_save_dir, exist_ok=True)
         self.model = GBDTModel(self.train_config_list,
                                os.path.join(model_save_dir,f'{log_time}'),
+                               graph_data=graph_data,
                                debug=self.debug)
 
     # use train data
@@ -162,7 +213,6 @@ class RNDTrainer:
         cell_model_list = self.model.fit(self.train_feature_config)
         return cell_model_list
 
-    # use test data
     def predict(self,cell_model_list = None, cell_model_path_list: List[str] = None): #根据type选择使用valid or test config
         os.makedirs('./whoiswho/training/rnd_result', exist_ok=True)
         if self.type == 'valid':

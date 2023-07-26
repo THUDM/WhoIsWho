@@ -4,6 +4,7 @@ import os
 import pickle
 import sys
 import copy
+import time
 from datetime import datetime
 from tqdm import tqdm
 from collections import defaultdict
@@ -18,6 +19,7 @@ from whoiswho.utils import set_log, load_pickle, save_pickle, load_json, save_js
 from whoiswho.loadmodel.ClusterModels import DBSCANModel
 from whoiswho.featureGenerator.sndFeature.semantic_features import SemanticFeatures
 from whoiswho.featureGenerator.sndFeature.relational_features import RelationalFeatures
+from os.path import join,dirname
 
 def tanimoto(p, q):
     """Calculate the tanimoto coefficient.
@@ -31,22 +33,21 @@ def tanimoto(p, q):
 
 def dump_result(pubs, pred):
     """Dump results file.
-
     Args:
         pubs: papers of this name (List).
         pred: predicted labels (Numpy Array).
     """
     result = []
-    for i in set(pred):
+    for label_i in set(pred): #cluster nums
         oneauthor = []
-        for idx, j in enumerate(pred):
-            if i == j:
+        for idx, label_j in enumerate(pred):
+            if label_i == label_j:
                 oneauthor.append(pubs[idx])
         result.append(oneauthor)
     return result # List[List[pid]]
 
 class SNDTrainer:
-    def __init__(self, version, processed_data_root = None, w_author = 1.5,
+    def __init__(self, version, datatype = None, processed_data_root = None, w_author = 1.5,
                  w_org = 1.0, w_venue=1.0, w_title= 0.33, text_weight=1.0,
                  db_eps = 0.2,db_min = 4):
         self.v2path = version2path(version)
@@ -54,7 +55,9 @@ class SNDTrainer:
         self.task = self.v2path['task']  # RND SND
         assert self.task == 'SND', 'This features' \
                                    'only support SND task'
-        self.type = self.v2path['type']  # train valid test
+        self.type = datatype
+        if not datatype:
+            self.type = self.v2path['type']  # train valid test
 
         # Modifying arguments when calling from outside
         self.processed_data_root = processed_data_root
@@ -71,6 +74,10 @@ class SNDTrainer:
         self.relational_feature = RelationalFeatures(version,self.processed_data_root)
 
         self.model =  DBSCANModel(db_eps,db_min)
+
+        # result_save_dir
+        self.result_save_dir = join(os.path.abspath(dirname(__file__)), f'{self.task}_result', '')
+        os.makedirs(self.result_save_dir, exist_ok=True)
 
 
     def save_pair(self,pubs, mode, name, outlier):
@@ -139,11 +146,7 @@ class SNDTrainer:
             for j, pjd in enumerate(pubs):
                 if j == i:
                     continue
-                ca = 0
-                cv = 0
-                co = 0
-                ct = 0
-
+                ca,cv,co,ct = 0,0,0,0
                 if pid in paper_author and pjd in paper_author:
                     ca = len(set(paper_author[pid]) & set(paper_author[pjd])) * self.w_author
                 if pid in paper_conf and pjd in paper_conf and 'null' not in paper_conf[pid]:
@@ -157,24 +160,18 @@ class SNDTrainer:
 
         return paper_paper
 
-    def post_match(self,pred, tcp, cp, pubs, mode, name):
-        """Post-match outliers of clustering results.
+    def post_match(self,pred, sem_outliers, rel_outliers, pubs, mode, name):
+        """
+        Post-match outliers of clustering results.
         Using threshold based characters' matching.
-
-        Args:
-            clustering labels (Numpy Array).
-
-        Returns:
-            predicted labels (Numpy Array).
-
         """
         outlier = set()
         for i in range(len(pred)):
             if pred[i] == -1:
                 outlier.add(i)
-        for i in tcp:
+        for i in sem_outliers:
             outlier.add(i)
-        for i in cp:
+        for i in rel_outliers:
             outlier.add(i)
 
         paper_pair = self.save_pair(pubs, mode, name, outlier)
@@ -209,7 +206,10 @@ class SNDTrainer:
         return pred
 
     def fit(self, add_sem=True, add_rel=True, if_post_match=True,
-        add_a=True, add_o=True, add_v=True) :
+        add_a=True, add_o=True, add_v=True,datatype=None) :
+        #If datatype is entered in fit, change self.datatype
+        if datatype:
+            self.type = datatype
         pubs = read_pubs(self.raw_data_root,self.type)
         raw_pubs = read_raw_pubs(self.raw_data_root,self.type)
         result = {}
@@ -218,43 +218,57 @@ class SNDTrainer:
         for n, name in enumerate(tqdm(raw_pubs)):
             if self.type == 'train':
                 pubs = []
-                # ilabel = 0
-                # labels = []
                 for aid in raw_pubs[name]:
                     pubs.extend(raw_pubs[name][aid])
-                    # labels.extend([ilabel] * len(raw_pubs[name][aid]))
-                    # ilabel += 1
+
             elif self.type == 'valid' or 'test':
                 # valid or test
                 pubs = raw_pubs[name]
             else:
                 print("Invalid type!")
 
-            tcp = set()
-            cp = set()
-            # 逐name获取特征
+            sem_outliers = set()
+            rel_outliers = set()
+            # Get feature by name
             if add_sem and not add_rel:
-                sem_dis, tcp = self.semantic_feature.cal_semantic_similarity(pubs, name)
+                sem_dis, sem_outliers = self.semantic_feature.cal_semantic_similarity(pubs, name)
                 dis = sem_dis
             elif not add_sem and add_rel:
-                rel_dis, cp = self.relational_feature.cal_relational_similarity(pubs, name, self.type, add_a, add_o, add_v)
+                rel_dis, rel_outliers = self.relational_feature.cal_relational_similarity(pubs, name, self.type, add_a, add_o, add_v)
                 dis = rel_dis
             elif add_sem and add_rel:
-                sem_dis, tcp = self.semantic_feature.cal_semantic_similarity(pubs, name)
-                rel_dis, cp = self.relational_feature.cal_relational_similarity(pubs, name, self.type, add_a, add_o, add_v)
+                sem_dis, sem_outliers = self.semantic_feature.cal_semantic_similarity(pubs, name)
+                rel_dis, rel_outliers = self.relational_feature.cal_relational_similarity(pubs, name, self.type, add_a, add_o, add_v)
+
                 dis = (np.array(rel_dis) + self.text_weight * np.array(sem_dis)) / (1 + self.text_weight)
-            # 逐name cluster  结果为pred
+
+            # Clustering by name
             pred = self.model.fit(dis)
+
+            # Handling of outliers
             if if_post_match:
-                pred = self.post_match(pred, tcp, cp, pubs, self.type, name)
+                pred = self.post_match(pred, sem_outliers, rel_outliers, pubs, self.type, name)
 
-
-            # 逐name保存聚类结果
+            # Save results by name
+            # The pred and pubs are in the same order.
             result[name] = []
             result[name].extend(dump_result(pubs, pred))
 
-        save_dir = './whoiswho/training/snd_result'
-        os.makedirs(save_dir, exist_ok=True)
-        save_json(result,save_dir, f'result.{self.type}.json')
+        save_json(result,self.result_save_dir, f'result.{self.type}.json')
 
 
+if __name__ == '__main__':
+    version = {"name": 'v3', "task": 'SND', "type": 'train'}
+    trainer = SNDTrainer(version)
+    trainer.fit()
+    logger.info("Finish Predict Train data")
+
+    version = {"name": 'v3', "task": 'SND', "type": 'valid'}
+    trainer = SNDTrainer(version)
+    trainer.fit()
+    logger.info("Finish Predict Valid data")
+
+    version = {"name": 'v3', "task": 'SND', "type": 'test'}
+    trainer = SNDTrainer(version)
+    trainer.fit()
+    logger.info("Finish Predict Test data")

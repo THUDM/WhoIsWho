@@ -19,10 +19,11 @@ from torch_geometric.data.batch import Batch
 from whoiswho.featureGenerator.rndFeature.graph_dataloader import GraphPairDataset
 from whoiswho.featureGenerator.rndFeature.model import SAGE, GAT,infonce,matchingModel,matchingModel_gnn,gat_parameters,sage_parameters,HR,MRR
 from whoiswho.config import RNDFilePathConfig, configs, version2path,uuid_path
+from whoiswho import logger
 
 
 class ProcessFeature:
-    def __init__(self, nameAidPid_path, prosInfo_path, unassCandi_path, validUnassPub_path,  dataset_type):
+    def __init__(self, nameAidPid_path, prosInfo_path, unassCandi_path, validUnassPub_path,  dataset_type, gpu_device=0):
 
         with open(nameAidPid_path, 'r') as files:
             self.nameAidPid = json.load(files)
@@ -42,15 +43,18 @@ class ProcessFeature:
 
         self.dataset_type = dataset_type
         global device
-        device = torch.device(f'cuda:0' if torch.cuda.is_available() else 'cpu')
+        device = torch.device(f'cuda:{gpu_device}' if torch.cuda.is_available() else 'cpu')
 
         self.matching_model = matchingModel(device)
         self.matching_model.to(device)
         self.matching_model.eval()
 
+        model_para = gat_parameters.copy()
+        model_para.pop('lr')
+        model_para.pop('l2')
         #load saved gnn model
-        self.gnnmodel = GAT(in_channels=768, out_channels=128, **gat_parameters).to(device)
-        model_dict = torch.load('gat_model_oagbert_sim.pt',map_location='cpu')['Gat']
+        self.gnnmodel = GAT(in_channels=768, out_channels=128, **model_para).to(device)
+        model_dict = torch.load(join(os.path.abspath(dirname(__file__)),'gat_model_oagbert_sim.pt'),map_location='cpu')['Gat']
         self.gnnmodel.load_state_dict(model_dict)
         self.gnnmodel.eval()
 
@@ -62,7 +66,7 @@ class ProcessFeature:
         if not os.path.exists(candi_4name_graph_path):
             os.makedirs(candi_4name_graph_path, exist_ok=True)
         candi_4name_graph_index_path = f"{candi_4name_graph_path}candi_4name_graphpath.json"
-
+        #Used to determine if the author's name has graph
         train_author_list = os.listdir(train_author_path)
         train_author_dict = dict(zip(train_author_list,list(range(len(train_author_list)))) )
 
@@ -104,21 +108,25 @@ class ProcessFeature:
         else :
             path = test_paper_path
 
-        all_train_emb_path = embedding_path + 'train/all_train_emb_w2v.npy'
+        all_train_emb_path = embedding_path + 'train/all_train_emb_sim.npy'
+        logger.info("Loading training set embedding...")
         all_train_emb = np.load(all_train_emb_path, allow_pickle=True).item()
-        all_valid_emb_path = embedding_path + 'valid/all_valid_emb_w2v.npy'
-        all_test_emb_path = embedding_path + 'test/all_test_emb_w2v.npy'
+
+        all_valid_emb_path = embedding_path + 'valid/all_valid_emb_sim.npy'
+        all_test_emb_path = embedding_path + 'test/all_test_emb_sim.npy'
+        logger.info("Loading valid set embedding...")
         all_valid_emb = np.load(all_valid_emb_path, allow_pickle=True).item()
+        logger.info("Loading test set embedding...")
         all_test_emb = np.load(all_test_emb_path, allow_pickle=True).item()
+        logger.info("Loading complete！")
         all_emb={}
         all_emb.update(all_train_emb)
         all_emb.update(all_valid_emb)
         all_emb.update(all_test_emb)
-
         with  open(candi_4name_graph_path+'candi_4name_graphpath.json', 'r', encoding='utf-8') as f:
             CandiNameGraph = json.load(f)
 
-        print(f'this experiment use more ref papers? {need_more_paper}')
+        print(f'whether use more reference papers? {need_more_paper}')
 
         allUnassPCandiAuthPWholeSimi = {}
 
@@ -134,7 +142,7 @@ class ProcessFeature:
 
             graph_data = GraphPairDataset(all_emb=all_emb,need_more_paper=need_more_paper)
             graph_pair,graph_names,paper_emb_len = graph_data.load_graph_pair(pair)
-            print(len(graph_pair))
+            # print(len(graph_pair))
 
             length_list = [0] + [len(graph_pair[i].x) for i in range(len(graph_pair))]
             graph_index = [reduce(lambda a, b: a + b, length_list[:i]) for i in range(2, len(length_list) + 1)]
@@ -183,11 +191,7 @@ class ProcessFeature:
 
 class GraphFeatures:
     def __init__(self, version, raw_data_root = None, processed_data_root = None,
-                 graph_data_root = None,whoiswhograph_extend_processed_data = None,graph_feat_root = None):
-        '''
-        1.根据type 配置config
-        2.根据config 配置processFeature
-        '''
+                 graph_data_root = None,whoiswhograph_extend_processed_data = None,graph_feat_root = None,device=0):
         self.v2path = version2path(version)
         self.raw_data_root = raw_data_root
         self.processed_data_root = processed_data_root
@@ -208,13 +212,13 @@ class GraphFeatures:
         if not processed_data_root:
             self.processed_data_root = self.v2path['processed_data_root']
         if not graph_data_root:
-            self.graph_data_root = self.v2path['graph_data_root']
+            self.graph_data_root = self.v2path['whoiswhograph_data_root']
         if not whoiswhograph_extend_processed_data:
             self.whoiswhograph_extend_processed_data = self.v2path['whoiswhograph_extend_processed_data']
         if not graph_feat_root:
             self.graph_feat_root = self.v2path['graph_feat_root']
 
-        self.embedding_path = join(self.v2path['graph_feat_root'], 'embeddings', '')
+        self.embedding_path = join(self.v2path['whoiswhograph_emb_root'])
 
         if self.type == 'train':
             self.config = {
@@ -233,7 +237,7 @@ class GraphFeatures:
                 "candi_4name_graph_path": self.graph_feat_root + 'train/',
                 "graph_simi_save_path": self.graph_feat_root + 'train/',
                 "graph_simi_final_save_path": self.graph_feat_root + 'pid2aid2graph_feat_gat.offline.pkl',
-                "start_end_index_pair_list": [(0, 2000), (2000, 4000), (4000, 6000), (6000, 7871)]  # range(a,b)
+                "start_end_index_pair_list": [(0, 2000), (2000, 4000), (4000, 6000), (6000, 7871)]
             }
 
         elif self.type == "valid":
@@ -279,18 +283,15 @@ class GraphFeatures:
         # Different configs correspond to different ProcessFeatures
         self.genGraphSimiFeat = ProcessFeature(self.config["nameAidPid_path"], self.config["prosInfo_path"],
                                               self.config["unassCandi_path"], self.config["validUnassPub_path"],
-                                              dataset_type = self.type)
+                                              dataset_type = self.type,gpu_device=device)
 
 
 
-    def get_graph_feature(self):
-
+    def get_graph_feature(self,start=-1,end=-1):
         genGraphSimiFeat = self.genGraphSimiFeat
-        start,end = -1,-1
         genGraphSimiFeat.get_candi_auth_graph_path(self.config["candi_4name_graph_path"],
                                                    self.config["prefix_train_author_graph_path"],
                                                    self.config["prefix_valid_author_graph_path"])
-
         genGraphSimiFeat.get_graph_simi_feature(start, end, self.config["candi_4name_graph_path"],
                                                         self.config["prefix_train_paper_graph_path"],
                                                         self.config["prefix_valid_paper_graph_path"],
@@ -300,3 +301,19 @@ class GraphFeatures:
                                                         embedding_path = self.embedding_path,
                                                         need_more_paper= True)
 
+
+if __name__ == '__main__':
+    version = {"name": 'v3', "task": 'RND', "type": 'train'}
+    graph_features = GraphFeatures(version)
+    graph_features.get_graph_feature()
+    logger.info("Finish Train data")
+
+    version = {"name": 'v3', "task": 'RND', "type": 'valid'}
+    graph_features = GraphFeatures(version)
+    graph_features.get_graph_feature()
+    logger.info("Finish Valid data")
+
+    version = {"name": 'v3', "task": 'RND', "type": 'test'}
+    graph_features = GraphFeatures(version)
+    graph_features.get_graph_feature()
+    logger.info("Finish Test data")

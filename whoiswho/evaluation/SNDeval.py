@@ -6,20 +6,45 @@ from datetime import datetime
 from whoiswho.dataset.data_process import read_pubs,read_raw_pubs
 from whoiswho.utils import load_json, save_json
 
+def evaluate(predict_result,ground_truth):
+    if isinstance(predict_result, str):
+        predict_result = load_json(predict_result)
+    if isinstance(ground_truth, str):
+        ground_truth = load_json(ground_truth)
+
+    name_nums = 0
+    result_list = []
+    for name in predict_result:
+        #Get clustering labels in predict_result
+        predicted_pubs = dict()
+        for idx,pids in enumerate(predict_result[name]):
+            for pid in pids:
+                predicted_pubs[pid] = idx
+        # Get paper labels in ground_truth
+        pubs = []
+        ilabel = 0
+        true_labels = []
+        for aid in ground_truth[name]:
+            pubs.extend(ground_truth[name][aid])
+            true_labels.extend([ilabel] * len(ground_truth[name][aid]))
+            ilabel += 1
+
+        predict_labels = []
+        for pid in pubs:
+            predict_labels.append(predicted_pubs[pid])
+
+        pairwise_precision, pairwise_recall, pairwise_f1 = pairwise_evaluate(true_labels,predict_labels)
+        result_list.append((pairwise_precision,pairwise_recall,pairwise_f1))
+        name_nums += 1
+
+    avg_pairwise_f1 = sum([result[2] for result in result_list])/name_nums
+    print(f'Average Pairwise F1: {avg_pairwise_f1:.3f}')
+
+    return avg_pairwise_f1
+
+
+
 def pairwise_evaluate(correct_labels, pred_labels):
-    """Pairwise evaluation.
-
-    Args:
-        correct_labels: ground-truth labels (Numpy Array).
-        pred_labels: predicted labels (Numpy Array).
-
-    Returns:
-        pairwise_precision (Float).
-        pairwise_recall (Float).
-        pairwise_f1 (Float).
-
-    """
-
     TP = 0.0  # Pairs Correctly Predicted To SameAuthor
     TP_FP = 0.0  # Total Pairs Predicted To SameAuthor
     TP_FN = 0.0  # Total Pairs To SameAuthor
@@ -45,38 +70,11 @@ def pairwise_evaluate(correct_labels, pred_labels):
     return pairwise_precision, pairwise_recall, pairwise_f1
 
 
-def evaluate(name, pubs, pred, labels, mode, cur_time):
-    """Evaluating with ground-truth.
-
-    Args:
-        name: disambiguating name (str).
-        pubs: papers of this name (List).
-        pred: predicted labels (Numpy Array).
-
-    Returns:
-        pairwise_precision (Float).
-        pairwise_recall (Float).
-        pairwise_f1 (Float).
-
-    """
-    labels = np.array(labels)
-    pred = np.array(pred)
-    pred_label_num = len(set(pred))
-    true_label_num = len(set(labels))
-    pairwise_precision, pairwise_recall, pairwise_f1 = pairwise_evaluate(labels, pred)
-
-    save_dir = './whoiswho/training/snd_result'
-    os.makedirs(save_dir, exist_ok=True)
-    log_path = join(save_dir, 'log', mode)
-    os.makedirs(log_path, exist_ok=True)
-    log_file = join(log_path, f'log_{cur_time}.txt')
-
-    with open(log_file, 'a') as f:
-        f.write(f'name: {name}, prec: {pairwise_precision: .4}, recall: {pairwise_recall: .4}, '
-                f'f1: {pairwise_f1: .4}, pred label num : {pred_label_num}/{true_label_num}\n')
-    f.close()
-
-    return pairwise_precision, pairwise_recall, pairwise_f1
 
 
+if __name__ == '__main__':
+    predict = 'Input the path of result.valid.json'
+    ground_truth = 'Input the path of sna_valid_ground_truth.json'
+
+    evaluate(predict,ground_truth)
 

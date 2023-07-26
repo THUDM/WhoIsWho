@@ -119,12 +119,15 @@ def fit_gbd_model(gbd_model, whole_x, whole_y, gbd_type='xgb'):
 
 class FeatDataLoader:
     def __init__(self, feat_config):
-        self.bert_path = feat_config['bert_path']
-        self.hand_dict = load_pickle(feat_config['hand_path'])
-        self.bert_dict = None
 
-        self.graph_path = feat_config['graph_path']
-        self.graph_dict = None
+        self.hand_dict = load_pickle(feat_config['hand_path'])
+        if 'bert_path' in feat_config:
+            self.bert_path = feat_config['bert_path']
+            self.bert_dict = None
+
+        if 'graph_path' in feat_config:
+            self.graph_path = feat_config['graph_path']
+            self.graph_dict = None
 
     def update_feat(self, feat_list):
         if 'bert' in feat_list and self.bert_dict is None:
@@ -226,12 +229,18 @@ class CellModel:
             whole_y = []
             for _, unass_pid, pos_aid, neg_aids in train_ins:
                 for neg_aid in neg_aids:
-                    feat = train_feat_data.get_whole_feat(unass_pid, neg_aid, cell_feat_list)
+                    try:
+                        feat = train_feat_data.get_whole_feat(unass_pid, neg_aid, cell_feat_list)
+                        whole_x.append(feat)
+                        whole_y.append(0)
+                    except:
+                        print(f'Error with unassigned pid {unass_pid}, neg_aid {neg_aid}')
+                try:
+                    feat = train_feat_data.get_whole_feat(unass_pid, pos_aid, cell_feat_list)
                     whole_x.append(feat)
-                    whole_y.append(0)
-                feat = train_feat_data.get_whole_feat(unass_pid, pos_aid, cell_feat_list)
-                whole_x.append(feat)
-                whole_y.append(1)
+                    whole_y.append(1)
+                except:
+                    continue
             whole_x = np.array(whole_x)
             whole_y = np.array(whole_y)
             self.fit(whole_x, whole_y, 'lv1', fold_i)
@@ -327,6 +336,7 @@ class GBDTModel:
     def __init__(self,
                  train_config_list,
                  model_save_dir,
+                 simplified=False,
                  graph_data=False,
                  debug=False):
         self.train_config_list = train_config_list # k fold train data
@@ -556,13 +566,34 @@ class GBDTModel:
             ],
         },
     ]
-        if graph_data : #Only train one catboost
+        #If using graph data or a simplified model, train only one catboost
+        if graph_data:
             self.cell_list_config = []
             self.cell_list_config.append(
                 {
                     'cell_weight': 5,
                     'score': 0.0,
                     'feature_list': ['graph'],
+                    'vote_type': 'mean',
+                    'model': [
+                        [
+                            {
+                                'gbd_type': 'cat',
+                                'params': {'verbose': False}
+                            }
+                        ],
+                        [
+                        ]
+                    ],
+                }
+            )
+        if simplified:
+            self.cell_list_config = []
+            self.cell_list_config.append(
+                {
+                    'cell_weight': 5,
+                    'score': 0.0,
+                    'feature_list': ['bert'],
                     'vote_type': 'mean',
                     'model': [
                         [
@@ -586,7 +617,7 @@ class GBDTModel:
         '''train one cell '''
         cell_feat_list = cell_config['feature_list']
         cell_model = CellModel(cell_config['model'], len(train_config_list), debug_mod= self.debug)
-        cell_model.train_model(train_config_list, train_feat_data, cell_feat_list)
+        cell_model.train_model(train_config_list, train_feat_data, cell_feat_list) #k-fold
         save_pickle(cell_model, cell_save_root, f'cell-{cell_index}.pkl')
         return cell_model
 
@@ -594,13 +625,12 @@ class GBDTModel:
         ''' train GBDT model'''
         os.makedirs(self.model_save_dir, exist_ok=True)
 
-        train_feat_data = FeatDataLoader(train_feature_config) #train set feature
+        train_feat_data = FeatDataLoader(train_feature_config)
         cell_model_list = []
         for cell_i, cell_config in enumerate(self.cell_list_config):
-            # 先训练每个cell
             s_time = time.time()
             log_msg = f'\n\nbegin to train cell {cell_i + 1}.'
-            print(log_msg)
+            # print(log_msg)
             logger.warning(log_msg)
             train_feat_data.update_feat(cell_config['feature_list'])
 
@@ -613,6 +643,9 @@ class GBDTModel:
                                                       self.model_save_dir,
                                                       cell_i + 1)
             cell_model_list.append(cell_model)
+
+            log_msg = f'\n\nfinish cell {cell_i + 1}.'
+            logger.warning(log_msg)
 
         return cell_model_list
 

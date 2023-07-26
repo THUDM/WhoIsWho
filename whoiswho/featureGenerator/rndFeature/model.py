@@ -332,7 +332,7 @@ class matchingModel_gnn(nn.Module):
         :param mu: |d| * 1 dimension mu
         :param sigma: |d| * 1 dimension sigma
         """
-        super(matchingModel, self).__init__()
+        super(matchingModel_gnn, self).__init__()
         self.n_bins = 41
         self.device = device
 

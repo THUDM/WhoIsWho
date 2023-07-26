@@ -59,15 +59,17 @@ def read_raw_pubs(raw_data_root,mode):
 
 def dump_name_pubs(raw_data_root,processed_data_root):
     for mode in ['train', 'valid', 'test']:
-
         # train valid format: name2aid2pid
         # test format: name2pid
-        raw_pubs = read_raw_pubs(raw_data_root,mode) #train_author / valid_ground_truth / sna_test_raw
-        pubs = read_pubs(raw_data_root,mode) #train_pub / sna_valid_pub / sna_test_pub
-        file_path = os.path.join(processed_data_root, 'names_pub',mode) #processed_data/names_pub/(mode)
+        try:
+            raw_pubs = read_raw_pubs(raw_data_root,mode)
+            pubs = read_pubs(raw_data_root,mode)
+            save_path = os.path.join(processed_data_root, 'names_pub',mode)
+        except:
+            continue
 
-        if not os.path.exists(file_path):
-            os.makedirs(file_path, exist_ok=True)
+        if not os.path.exists(save_path):
+            os.makedirs(save_path, exist_ok=True)
             for name in tqdm(raw_pubs):
                 name_pubs_raw = {}
                 if mode == "test" or mode == 'valid':
@@ -79,7 +81,7 @@ def dump_name_pubs(raw_data_root,processed_data_root):
                         pids.extend(raw_pubs[name][aid])
                     for pid in pids:
                         name_pubs_raw[pid] = pubs[pid]
-                save_json(name_pubs_raw, os.path.join(file_path, name+'.json'))
+                save_json(name_pubs_raw, os.path.join(save_path, name+'.json'))
 
 
 def dump_features_relations_to_file(raw_data_root,processed_data_root):
@@ -87,7 +89,6 @@ def dump_features_relations_to_file(raw_data_root,processed_data_root):
     Generate paper features and relations by raw publication data and dump to files.
     Paper features consist of title, org, keywords. Paper relations consist of author_name, org, venue.
     """
-
     texts_dir = os.path.join(processed_data_root, 'extract_text')
 
     os.makedirs(texts_dir, exist_ok=True)
@@ -95,9 +96,12 @@ def dump_features_relations_to_file(raw_data_root,processed_data_root):
     r = '[!“”"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~—～’]+'
 
     for mode in ['train', 'valid', 'test']:
-        raw_pubs = read_raw_pubs(raw_data_root,mode)
-        for n, name in enumerate(tqdm(raw_pubs)):
+        try:
+            raw_pubs = read_raw_pubs(raw_data_root,mode)
+        except:
+            continue
 
+        for n, name in enumerate(tqdm(raw_pubs)):
             file_path = os.path.join(processed_data_root, 'relations', mode, name)
             os.makedirs(file_path, exist_ok=True)
             coa_file = open(os.path.join(file_path, 'paper_author.txt'), 'w', encoding='utf-8')
@@ -114,7 +118,6 @@ def dump_features_relations_to_file(raw_data_root,processed_data_root):
             for i, pid in enumerate(pubs_dict):
                 paper_features = []
                 pub = pubs_dict[pid]
-
                 # Save title (relations)
                 title = pub["title"]
                 pstr = title.strip()
@@ -145,7 +148,6 @@ def dump_features_relations_to_file(raw_data_root,processed_data_root):
                     token = authorname.split(" ")
 
                     if len(token) == 2:
-
                         authorname = token[0] + token[1]
                         authorname_reverse = token[1] + token[0]
                         if authorname not in authorname_dict:
@@ -219,17 +221,19 @@ def dump_plain_texts_to_file(raw_data_root,processed_data_root):
     """
     Dump raw publication data to files.
     Plain texts consist of all paper attributes and the authors' names and organizations (except year).
-
     """
-
     train_pubs_dict = load_json(os.path.join(raw_data_root, 'train', 'train_pub.json'))
     valid_pubs_dict = load_json(os.path.join(raw_data_root, 'valid', 'sna_valid_pub.json'))
-    test_pubs_dict = load_json(os.path.join(raw_data_root, 'test', 'sna_test_pub.json'))
 
     pubs_dict = {}
     pubs_dict.update(train_pubs_dict)
     pubs_dict.update(valid_pubs_dict)
-    pubs_dict.update(test_pubs_dict)
+
+    try:
+        test_pubs_dict = load_json(os.path.join(raw_data_root, 'test', 'sna_test_pub.json'))
+        pubs_dict.update(test_pubs_dict)
+    except:
+        pass
 
     texts_dir = os.path.join(processed_data_root, 'extract_text')
     os.makedirs(texts_dir, exist_ok=True)
@@ -260,7 +264,6 @@ def dump_plain_texts_to_file(raw_data_root,processed_data_root):
 
         author_name_list = []
         for author in pub["authors"]:
-
             # Save org (every author's organization)
             if "org" in author:
                 org = author["org"]
@@ -345,7 +348,7 @@ def split_train2dev(data: list,processed_data_root: str, unass_ratio=0.2):
                 year = 0
             else:
                 year = int(year)
-            if year < 1500 or year > 2022:
+            if year < 1500 or year > 2023:
                 year = 0
             years.add(year)
             authors = paper_info[pid].get('authors', [])
@@ -363,6 +366,8 @@ def split_train2dev(data: list,processed_data_root: str, unass_ratio=0.2):
             #     cnt_unfind_author_num += 1
             # assert aids >= 0, f"{name} 's paper {pid}"
             now_years[year].append((pid, aids,))
+
+        #papers_list : sort paperid by year
         years = list(years)
         years.sort(reverse=False)
         papers_list = []
@@ -385,33 +390,36 @@ def split_train2dev(data: list,processed_data_root: str, unass_ratio=0.2):
             unass_info[name] = {}
             dump_info[name] = {}
             for aid in authors_info[name]:
+                # paper ids
                 papers = authors_info[name][aid]
                 prof_list, unass_list, cnt_unfind_num = _get_last_n_paper(name, papers, papers_info, unass_ratio)
                 sum_unfind_author_num += cnt_unfind_num
-
+                #Create profile about train_unass
                 unass_info[name][aid] = [f"{p[0]}-{p[1]}" for p in unass_list if
-                                         'authors' in papers_info[p[0]] and 0 <= p[1] < len(
-                                             papers_info[p[0]]['authors'])]
+                                         'authors' in papers_info[p[0]] and
+                                         0 <= p[1] < len(papers_info[p[0]]['authors'])]
+                #Create profile about train_dump
                 dump_info[name][aid] = [f"{p[0]}-{p[1]}" for p in prof_list]
+                # train_unass list
                 for pid in unass_info[name][aid]:
                     unass_candi_list.append((pid, name))
         print('The number of papers that could not find the author name : ', sum_unfind_author_num)
         return unass_candi_list
 
-    papers_info = data[1]
     authors_info = data[0]
+    papers_info = data[1]
     names = []
     for name in authors_info:
         names.append(name)
     random.shuffle(names)
 
-    train_unass_info = {}
-    train_dump_info = {}
+    train_unass_info = {} #profile about train_unass
+    train_dump_info = {}  #profile about train_dump
+    # train_unass list
     train_unass_candi = _split_unass(names, authors_info, papers_info, train_unass_info, train_dump_info)
-    save_json(train_dump_info, processed_data_root, "train/offline_profile.json")
     save_json(train_unass_info, processed_data_root, "train/offline_unass.json")
+    save_json(train_dump_info, processed_data_root, "train/offline_profile.json")
     save_json(train_unass_candi, processed_data_root, 'train/unass_candi.whole.json')
-
 
 
 
@@ -581,10 +589,10 @@ def kfold_main_func(processed_data_root,offline_whole_profile, offline_whole_una
     tmp, start_index = split_list2kfold(unused_name_weight, k, start_index)
     for i in range(k):
         split_res[i].extend(tmp[i])
-
     tmp, start_index = split_list2kfold(both_name_weight, k, start_index)
     for i in range(k):
         split_res[i].extend(tmp[i])
+
     # Generate the training data set of four-tuples
     for i in range(k):
         this_root = os.path.join(kfold_path, f'kfold_v{i + 1}')
@@ -624,9 +632,9 @@ def kfold_main_func(processed_data_root,offline_whole_profile, offline_whole_una
         save_json(dev_ins, this_root, 'test_ins.json')
     print(name_weight)
 
-def processdata_SND(ret,version):
+def processdata_SND(version: dict):
     v2path = version2path(version)
-    pprint(v2path)
+    # pprint(v2path)
     raw_data_root = v2path['raw_data_root']
     processed_data_root = v2path["processed_data_root"]
 
@@ -638,21 +646,26 @@ def processdata_SND(ret,version):
     logger.info('Finish extract relations')
 
 
-def processdata_RND(ret,version):
-    if isinstance(ret, str):
-        ret=load_json(ret)
+def processdata_RND(version: dict,train_data: list = []):
     v2path = version2path(version)
-    pprint(v2path)
+    # pprint(v2path)
     raw_data_root = v2path['raw_data_root']
     processed_data_root = v2path["processed_data_root"]
 
+    # train_data stores the content of train_author.json and train_pub.json
+    if not train_data:
+        train_pros = load_json(raw_data_root, RNDFilePathConfig.train_name2aid2pid)
+        train_pubs_info = load_json(raw_data_root, RNDFilePathConfig.train_pubs)
+        train_data.append(train_pros)
+        train_data.append(train_pubs_info)
+
     # Partition train set by year
-    split_train2dev(data=ret,
+    split_train2dev(data=train_data,
                     processed_data_root=processed_data_root,
                     unass_ratio=0.2)
+
     offline_profile = load_json(processed_data_root, "train/offline_profile.json")
     offline_unass = load_json(processed_data_root, "train/offline_unass.json")
-
     kfold_main_func(processed_data_root,offline_profile, offline_unass, 5)
 
     logger.info('Begin Combine Data')
@@ -661,16 +674,23 @@ def processdata_RND(ret,version):
     logger.info('Finish Combine Data')
 
     # Papers that have not been assigned
-    pretreat_unass(raw_data_root,processed_data_root,RNDFilePathConfig.unass_candi_v1_path, "valid/cna_valid_unass.json",
-                   "valid/cna_valid_unass_pub.json")
-    pretreat_unass(raw_data_root,processed_data_root,RNDFilePathConfig.unass_candi_v2_path, "test/cna_test_unass.json",
-                   "test/cna_test_unass_pub.json")
+    try:
+        pretreat_unass(raw_data_root,processed_data_root,RNDFilePathConfig.unass_candi_v1_path, "valid/cna_valid_unass.json",
+                       "valid/cna_valid_unass_pub.json")
+    except:
+        logger.error('Error in Pretreat Valid')
+
+    try:
+        pretreat_unass(raw_data_root,processed_data_root,RNDFilePathConfig.unass_candi_v2_path, "test/cna_test_unass.json",
+                       "test/cna_test_unass_pub.json")
+    except:
+        logger.error('Error in Pretreat Test')
 
 
 if __name__ == '__main__':
-    # train, version = load_utils.LoadData(name="v3", type="train", task='RND')
-    # processdata_RND(train,version)
+    train, version = load_utils.LoadData(name="v3", type="train", task='RND')
+    processdata_RND(train,version)
 
-    train, version = load_utils.LoadData(name="v3", type="train", task='SND')
-    processdata_SND(train,version)
+    # train, version = load_utils.LoadData(name="v3", type="train", task='SND')
+    # processdata_SND(train,version)
 

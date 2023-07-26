@@ -177,14 +177,15 @@ def valid(model,score_model,valid_data,device):
     return HR_1,loss_log
 
 
-def gnn_train(version):
+def gnn_train():
+    version = {"name": 'v3', "task": 'RND', "type": 'train'}
     v2path = version2path(version)
 
     parser = argparse.ArgumentParser(description='gnn_models')
     parser.add_argument('--device', type=int, default=0)
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--model', type=str, default='gat')
-    parser.add_argument('--epochs', type=int, default=30)
+    parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--channels', type=int, default=128)
 
     # Whether to use scheduler in training
@@ -193,19 +194,21 @@ def gnn_train(version):
     parser.add_argument('--need_more_paper', default=True)
     # Used for parsing num_pair
     parser.add_argument('--idx_to_path', type=str,
-                        default=join(v2path['graph_data_root'],'train_graph','idx_to_path.json'))
+                        default=join(v2path['whoiswhograph_data_root'],'train_graph','idx_to_path.json'))
     # Load prepared node embeddings
     parser.add_argument('--all_emb_path', type=str,
-                        default = join(v2path['graph_feat_root'],'embeddings','train','all_train_emb_sim.npy'))
+                        default = join(v2path['whoiswhograph_emb_root'],'train','all_train_emb_sim.npy'))
     args = parser.parse_args()
 
     device = f'cuda:{args.device}' if torch.cuda.is_available() else 'cpu'
     device = torch.device(device)
 
     all_emb=np.load(args.all_emb_path, allow_pickle=True).item()
-    train_data = GraphPairDataset(args, numpair_path=join(v2path['graph_data_root'],'train_graph','train_pair.json'),
+
+    #Load graph by num_pair
+    train_data = GraphPairDataset(args=args, numpair_path=join(v2path['whoiswhograph_data_root'],'train_graph','train_pair.json'),
                                   all_emb=all_emb, need_more_paper=args.need_more_paper)
-    valid_data = GraphPairDataset(args, numpair_path=join(v2path['graph_data_root'],'train_graph','valid_pair.json'),
+    valid_data = GraphPairDataset(args=args, numpair_path=join(v2path['whoiswhograph_data_root'],'train_graph','valid_pair.json'),
                                   all_emb=all_emb, need_more_paper=args.need_more_paper)
 
     if args.model == 'gat':
@@ -238,8 +241,7 @@ def gnn_train(version):
 
     maxscore = 0
     train_process_loss_log,valid_process_loss_log=[],[]
-    lr_max = 0.1
-    lr_min = 0.00001
+
     for epoch in range(1, args.epochs + 1):
         #Check the performance of the initial model on valid set
         if epoch==1:
@@ -261,3 +263,7 @@ def gnn_train(version):
             state = {'Gat': model.state_dict(),
                      'Linear': score_model.state_dict()}
             torch.save(state, '{}_model_oagbert_sim.pt'.format(args.model))
+
+if __name__ == '__main__':
+    #Train gnn based on whoiswhograph.
+    gnn_train()

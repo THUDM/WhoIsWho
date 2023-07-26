@@ -10,7 +10,10 @@ def version2path(version: dict) -> dict:
     """
     Map the dataset information to the corresponding path
     """
-    name, task, type = list(version.values())
+    name = version.get("name","")
+    task = version.get("task","")
+    type = version.get("type","")
+
     # print(os.path.abspath(dirname(__file__)))
     data_root =  join(os.path.abspath(dirname(__file__)), f'dataset/data/',name, task,'')
     feat_root = join(os.path.abspath(dirname(__file__)), f'featureGenerator/feat/',name, task,'')
@@ -20,6 +23,7 @@ def version2path(version: dict) -> dict:
     processed_data_root = os.path.join(data_root, 'processed_data/')
     whoiswhograph_data_root =  os.path.join(data_root, 'graph_data/')
     whoiswhograph_extend_processed_data = os.path.join(data_root,'whoiswhograph_extend_processed_data/')
+    whoiswhograph_emb_root = os.path.join(data_root, 'graph_embedding/')
 
     #feat
     hand_feat_root = os.path.join(feat_root, 'hand/')
@@ -32,8 +36,9 @@ def version2path(version: dict) -> dict:
         'type': type,
         'raw_data_root': raw_data_root,
         'processed_data_root': processed_data_root,
-        'graph_data_root': whoiswhograph_data_root,
+        'whoiswhograph_data_root': whoiswhograph_data_root,
         'whoiswhograph_extend_processed_data': whoiswhograph_extend_processed_data,
+        'whoiswhograph_emb_root': whoiswhograph_emb_root,
         'hand_feat_root': hand_feat_root,
         'bert_feat_root': bert_feat_root,
         'graph_feat_root': graph_feat_root}
@@ -51,8 +56,6 @@ configs = {
     "train_neg_sample"              : 19,
     "test_neg_sample"               : 19,
 
-    # "train_ins"                     : 9622,
-    # "test_ins"                      : 1480,
 
     "train_max_papers_each_author"  : 100,
     "train_min_papers_each_author"  : 5,

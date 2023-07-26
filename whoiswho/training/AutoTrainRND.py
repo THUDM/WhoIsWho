@@ -6,8 +6,13 @@ import logging
 import random
 import time
 from collections import defaultdict
+from os.path import join,dirname
 import multiprocessing
 from typing import List, Dict, Any
+
+import numpy as np
+from tqdm import tqdm
+
 sys.path.append('../../')
 from whoiswho import logger
 from whoiswho.dataset import load_utils
@@ -17,7 +22,7 @@ from whoiswho.loadmodel.ClassficationModels import GBDTModel,FeatDataLoader
 
 def get_cell_pred(cell_model, unass_pid2aid, eval_feat_data, cell_feat_list):
     unass_pid2aid2score = defaultdict(dict)
-    for unass_pid, candi_aids in unass_pid2aid:
+    for unass_pid, candi_aids in tqdm(unass_pid2aid):
         candi_feat = []
         for candi_aid in candi_aids:
             candi_feat.append(eval_feat_data.get_whole_feat(unass_pid, candi_aid, cell_feat_list))
@@ -75,27 +80,37 @@ def test_config2data(test_config,debug_mod=False):
 
     if debug_mod:
         unass_list = unass_list[:20]
+
     for unass_pid, name in unass_list:
-        candi_aids = list(unass_name2aid2pid_v1[name])
+        # candi_aids = list(unass_name2aid2pid_v1[name])
+        candi_aids = [aid for aid in unass_name2aid2pid_v1[name] if unass_name2aid2pid_v1[name][aid]]
         unass_pid2aid.append((unass_pid, candi_aids))
     return eval_feat_data, unass_pid2aid
 
 
 class RNDTrainer:
-    def __init__(self, version, debug=False ,processed_data_root = None, hand_feat_root=None, bert_feat_root=None, graph_data=False):
+    def __init__(self, version, debug=False , datatype = None , raw_data_root = None,processed_data_root = None, hand_feat_root=None, bert_feat_root=None,
+                 simplified = False, graph_data=False):
         self.v2path = version2path(version)
         self.name = self.v2path['name']
         self.task = self.v2path['task']  # RND SND
         assert self.task == 'RND', 'This features' \
                                    'only support RND task'
-        self.type = self.v2path['type']  # train valid test
 
         self.debug = debug
 
         # Modifying arguments when calling from outside
+        self.type = datatype
+        self.raw_data_root = raw_data_root
         self.processed_data_root = processed_data_root
         self.hand_feat_root = hand_feat_root
         self.bert_feat_root = bert_feat_root
+        self.graph_data = graph_data  #Whether use the whoiswhograph data
+
+        if not datatype:
+            self.type = self.v2path['type']  # train valid test
+        if not raw_data_root:
+            self.raw_data_root = self.v2path['raw_data_root']
         if not processed_data_root:
             self.processed_data_root = self.v2path['processed_data_root']
         if not hand_feat_root:
@@ -103,7 +118,7 @@ class RNDTrainer:
         if not bert_feat_root:
             self.bert_feat_root = self.v2path['bert_feat_root']
 
-        print(f'processed_data_root: {self.processed_data_root}\nhand_feat_root: {self.hand_feat_root}\nbert_feat_root: {self.bert_feat_root}\n ')
+        # print(f'processed_data_root: {self.processed_data_root}\nhand_feat_root: {self.hand_feat_root}\nbert_feat_root: {self.bert_feat_root}\n ')
 
         # The train data configuration, which is related to create GBDT models
         self.train_config_list = [
@@ -137,24 +152,24 @@ class RNDTrainer:
         }
         # valid set and test set config
         self.test_config_v1 = {
-
             'bert_path': self.bert_feat_root + 'pid2aid2bert_feat.onlinev1.pkl',
             'hand_path': self.hand_feat_root + 'pid2aid2hand_feat.onlinev1.pkl',
             'unass_path': self.processed_data_root + RNDFilePathConfig.unass_candi_v1_path,
             'name2aid2pid': self.processed_data_root + RNDFilePathConfig.whole_name2aid2pid,
         }
-        self.test_config_v2 = {
 
+        self.test_config_v2 = {
             'bert_path': self.bert_feat_root + 'pid2aid2bert_feat.onlinev2.pkl',
             'hand_path': self.hand_feat_root + 'pid2aid2hand_feat.onlinev2.pkl',
             'unass_path': self.processed_data_root + RNDFilePathConfig.unass_candi_v2_path,
             'name2aid2pid': self.processed_data_root + RNDFilePathConfig.whole_name2aid2pid,
         }
 
-        if graph_data == True:
+
+        if self.graph_data:
             self.whoiswhograph_extend_processed_data = self.v2path['whoiswhograph_extend_processed_data']
             self.graph_feat_root = self.v2path['graph_feat_root']
-            self.train_config_list = [
+            self.graph_train_config_list = [
                 {
                     'train_path': self.whoiswhograph_extend_processed_data + "/train/kfold_dataset/kfold_v1/train_ins.json",
                     'dev_path': self.whoiswhograph_extend_processed_data + "/train/kfold_dataset/kfold_v1/test_ins.json",
@@ -177,19 +192,24 @@ class RNDTrainer:
                 },
             ]
 
-            # train feature
-            self.train_feature_config = {
+            # Check if graph_data related features are stored.
+            if not os.path.exists(self.hand_feat_root + 'whoiswhograph_pid2aid2hand_feat.offline.pkl'):
+                print("Please Generating Graph Feature First!")
+                raise RuntimeError
+
+            # training set feature
+            self.graph_train_feature_config = {
                 'hand_path': self.hand_feat_root + 'whoiswhograph_pid2aid2hand_feat.offline.pkl',
                 'graph_path': self.graph_feat_root + 'pid2aid2graph_feat_gat.offline.pkl',
             }
             # valid set and test set config
-            self.test_config_v1 = {
+            self.graph_test_config_v1 = {
                 'hand_path': self.hand_feat_root + 'pid2aid2hand_feat.onlinev1.pkl',
                 'graph_path': self.graph_feat_root + 'pid2aid2graph_feat_gat.onlinev1.pkl',
                 'unass_path': self.whoiswhograph_extend_processed_data + RNDFilePathConfig.unass_candi_v1_path,
                 'name2aid2pid': self.processed_data_root + RNDFilePathConfig.whole_name2aid2pid,
             }
-            self.test_config_v2 = {
+            self.graph_test_config_v2 = {
                 'hand_path': self.hand_feat_root + 'pid2aid2hand_feat.onlinev2.pkl',
                 'graph_path': self.graph_feat_root + 'pid2aid2graph_feat_gat.onlinev2.pkl',
                 'unass_path': self.whoiswhograph_extend_processed_data + RNDFilePathConfig.unass_candi_v2_path,
@@ -198,23 +218,55 @@ class RNDTrainer:
 
 
         # model_save_dir
-        if graph_data:
-            model_save_dir = f'./whoiswho/training/{self.task}_graph_save_model'
-        else:
-            model_save_dir = f'./whoiswho/training/{self.task}_save_model'
-        os.makedirs(model_save_dir, exist_ok=True)
-        self.model = GBDTModel(self.train_config_list,
-                               os.path.join(model_save_dir,f'{log_time}'),
-                               graph_data=graph_data,
-                               debug=self.debug)
+        self.model_save_dir = join(os.path.abspath(dirname(__file__)), f'{self.task}_save_model', '')
+        os.makedirs(self.model_save_dir, exist_ok=True)
+        if self.graph_data:
+            self.graph_model_save_dir = join(os.path.abspath(dirname(__file__)), f'{self.task}_graph_save_model','')
+            os.makedirs(self.graph_model_save_dir, exist_ok=True)
 
+        # result_save_dir
+        self.result_save_dir = join(os.path.abspath(dirname(__file__)), f'{self.task}_result', '')
+        os.makedirs(self.result_save_dir, exist_ok=True)
+        # if self.graph_data:
+        #     self.graph_result_save_dir = join(os.path.abspath(dirname(__file__)), f'{self.task}_graph_result','')
+        #     os.makedirs(self.graph_result_save_dir, exist_ok=True)
+
+
+        self.semantic_model = GBDTModel(self.train_config_list,
+                               os.path.join(self.model_save_dir,f'{log_time}'),
+                               simplified = simplified,  # use simplified gbdt model, only one catboost
+                               debug = self.debug)
+
+        if self.graph_data:
+            self.relational_model = GBDTModel(self.graph_train_config_list,
+                                            os.path.join(self.graph_model_save_dir, f'{log_time}'),
+                                            graph_data=graph_data,
+                                            debug=self.debug)
     # use train data
-    def fit(self) -> list:
-        cell_model_list = self.model.fit(self.train_feature_config)
-        return cell_model_list
+    def fit(self):
+        # train semantic & relational models
+        if self.graph_data:
+            # train_feature_config
+            cell_model_list = self.semantic_model.fit(self.train_feature_config)
+            # graph_train_feature_config
+            graph_cell_model_list = self.relational_model.fit(self.graph_train_feature_config)
+            return (cell_model_list, graph_cell_model_list)
+        # train semantic model
+        else:
+            cell_model_list = self.semantic_model.fit(self.train_feature_config)
+            return (cell_model_list,None)
 
-    def predict(self,cell_model_list = None, cell_model_path_list: List[str] = None): #根据type选择使用valid or test config
-        os.makedirs('./whoiswho/training/rnd_result', exist_ok=True)
+    def predict(self,whole_cell_model_list = None, cell_model_path_list: List[str] = None,
+                graph_cell_model_list = None, graph_cell_model_path_list: List[str] = None, datatype = None):
+        try:
+            cell_model_list = whole_cell_model_list[0]
+        except:
+            pass
+
+        #If datatype is entered in predict, change self.datatype
+        if datatype:
+            self.type = datatype
+
         if self.type == 'valid':
             test_config = self.test_config_v1
             eval_feat_data, unass_pid2aid = test_config2data(test_config,debug_mod=self.debug)
@@ -223,49 +275,69 @@ class RNDTrainer:
             eval_feat_data, unass_pid2aid = test_config2data(test_config,debug_mod=self.debug)
 
         if cell_model_path_list:
-            cell_model_list = self.model.load(cell_model_path_list)
-
+            cell_model_list = self.semantic_model.load(cell_model_path_list)
+        logger.info('predicting...')
         res_unass_aid2score_list = defaultdict(dict)
-
-        for cell_i, cell_config in enumerate(self.model.cell_list_config):
+        for cell_i, cell_config in enumerate(self.semantic_model.cell_list_config):
             cell_model = cell_model_list[cell_i]
             eval_feat_data.update_feat(cell_config['feature_list'])
             get_result(cell_model, unass_pid2aid, eval_feat_data, cell_config, cell_i,
                        res_unass_aid2score_list,
-                       self.model.cell_weight_sum, './whoiswho/training/rnd_result', f'{self.type}')
+                       self.semantic_model.cell_weight_sum,
+                       self.result_save_dir,
+                       f'{self.type}')
+
+        if self.graph_data :
+            try:
+                graph_cell_model_list = whole_cell_model_list[1]
+            except:
+                pass
+            if self.type == 'valid':
+                test_config = self.graph_test_config_v1
+                eval_feat_data, unass_pid2aid = test_config2data(test_config, debug_mod=self.debug)
+            else:  # test
+                test_config = self.graph_test_config_v2
+                eval_feat_data, unass_pid2aid = test_config2data(test_config, debug_mod=self.debug)
+
+            if graph_cell_model_path_list:
+                graph_cell_model_list = self.relational_model.load(graph_cell_model_path_list)
+
+            logger.info('predicting...')
+            for cell_i, cell_config in enumerate(self.relational_model.cell_list_config):
+                cell_model = graph_cell_model_list[cell_i]
+                eval_feat_data.update_feat(cell_config['feature_list'])
+                get_result(cell_model, unass_pid2aid, eval_feat_data, cell_config,
+                           cell_i + len(self.semantic_model.cell_list_config), #cell number
+                           res_unass_aid2score_list,
+                           15,
+                           self.result_save_dir,
+                           f'{self.type}')
 
         # Store the final results of voting by all cell_models
-        score_result_path = os.path.join('./whoiswho/training/rnd_result', f'result_score_vote.{self.type}.json')
+        score_result_path = os.path.join(self.result_save_dir, f'result_score_vote.{self.type}.json')
         save_json(dict(res_unass_aid2score_list), score_result_path)
 
         # Set a threshold to filter NIL
         deal_nil_threshold_new(
-            score_result_path, './whoiswho/training/rnd_result', f'{self.type}', 0.65
+            score_result_path, self.result_save_dir, f'{self.type}', 0.65
 
         )
 
 if __name__ == '__main__':
-    data, version = load_utils.LoadData(name="v3", type="train", task='RND', download=False)
-    trainer = RNDTrainer(version)
+    version = {"name": 'v3', "task": 'RND', "type": 'train'}
+    trainer = RNDTrainer(version,graph_data=True,simplified=True)
     cell_model_list = trainer.fit()
     logger.info("Finish Train data")
 
-    data, version = load_utils.LoadData(name="v3", type="valid", task='RND', download=False)
-    trainer = RNDTrainer(version)
-    # Load stored models
-    # cell_model_path_list = [
-    #     f'/home/hantianyi/whoiswho_dev/whoiswho/training/save_model/0515_143345/cell-{i}.pkl'
-    #     for i in range(1,13)
-    # ]
-    # trainer.predict(cell_model_path_list = cell_model_path_list) #use cell_model_list or cell_model_path_list
-    trainer.predict(cell_model_list=cell_model_list)
+    version = {"name": 'v3', "task": 'RND', "type": 'valid'}
+    trainer = RNDTrainer(version,graph_data=True,simplified=True)
+    trainer.predict(whole_cell_model_list=cell_model_list)
     logger.info("Finish Valid data")
 
-    data, version = load_utils.LoadData(name="v3", type="test", task='RND', download=False)
-    trainer = RNDTrainer(version)
-    trainer.predict(cell_model_list=cell_model_list)
+    version = {"name": 'v3', "task": 'RND', "type": 'test'}
+    trainer = RNDTrainer(version,graph_data=True,simplified=True)
+    trainer.predict(whole_cell_model_list=cell_model_list)
     logger.info("Finish Test data")
-
 
 
 

@@ -10,9 +10,10 @@ from time import time
 # path: saved dir
 # partition: none
 DATA_PATH = "https://lfs.aminer.cn/misc/ND-data"
-NAME_SET = set(['v1', 'v2', 'v3'])
-TYPE_SET = set(['train', 'valid', 'test'])
-TASK_SET = set(['SND','RND'])
+NAME_SET = set(['v1', 'v2', 'v3']) #NA dataset name
+TASK_SET = set(['SND','RND'])      #NA dataset task
+TYPE_SET = set(['train', 'valid', 'test']) #NA dataset type
+
 # function to display download progress bar
 def progress_bar(progress, total, speed):
     filled = int(progress * 40 // total)
@@ -21,13 +22,13 @@ def progress_bar(progress, total, speed):
     sys.stdout.flush()
 
 
-def LoadData(name: str, type: str, task: str, path = None, just_version=False) -> List[dict]:
+def LoadData(name: str, task: str, type: str, path = None, just_version=False) -> List[dict]:
     if name not in NAME_SET:
         raise ValueError(f"NAME must in {NAME_SET}")
-    if type not in TYPE_SET:
-        raise ValueError(f"TYPE must in {TYPE_SET}")
     if task not in TASK_SET:
         raise ValueError(f"TASK must in {TASK_SET}")
+    if type not in TYPE_SET:
+        raise ValueError(f"TYPE must in {TYPE_SET}")
     version={"name":name,"task":task,"type":type}
     if just_version:
         return version
@@ -145,7 +146,6 @@ def LoadData(name: str, type: str, task: str, path = None, just_version=False) -
 
             # iterate over the response content in chunks
             for chunk in response.iter_content(chunk_size=1024):
-
                 # calculate the progress and download speed
                 progress += len(chunk)
                 if not start_time:

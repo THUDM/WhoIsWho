@@ -6,10 +6,11 @@ import random
 import pickle
 import torch
 from cogdl.oag import oagbert
+sys.path.append('../../../')
 from whoiswho.featureGenerator.rndFeature.model import bertEmbeddingLayer, matchingModel
 import argparse
 import os
-sys.path.append('../../../')
+from whoiswho.utils import load_json, save_json
 from whoiswho.config import RNDFilePathConfig, configs, version2path,pretrained_oagbert_path
 from whoiswho.dataset import load_utils
 from whoiswho import logger
@@ -24,7 +25,7 @@ Generating bert_simi_feature consists of two steps:
 '''
 
 class ProcessFeature:
-    def __init__(self, nameAidPid_path, prosInfo_path, unassCandi_path, validUnassPub_path):
+    def __init__(self, nameAidPid_path, prosInfo_path, unassCandi_path, validUnassPub_path,gpu_device=0):
 
         with open(nameAidPid_path, 'r') as files:
             self.nameAidPid = json.load(files)
@@ -43,7 +44,7 @@ class ProcessFeature:
 
         self.maxPapers = 40
         global bert_device
-        bert_device = torch.device(f'cuda:0' if torch.cuda.is_available() else 'cpu')
+        bert_device = torch.device(f'cuda:{gpu_device}' if torch.cuda.is_available() else 'cpu')
 
         self.matching_model = matchingModel(bert_device)
         self.matching_model.to(bert_device)
@@ -129,6 +130,7 @@ class ProcessFeature:
 
         candi_4name_bert_emb_index_path = f"{candi_4name_bert_emb_path}candi_4name_bert_emb_index.pickle"
         if not os.path.exists(candi_4name_bert_emb_index_path): # if not found, create a new one
+            unqualified_unass_paper=[]
             for insIndex in range(len(self.unassCandi)):
                 # Calculate the names of all authors involved in the test set
                 unassPid, candiName = self.unassCandi[insIndex]
@@ -140,18 +142,33 @@ class ProcessFeature:
                     totalPubs = self.nameAidPid[candiName][each]
                     if len(totalPubs) == 0:
                         print("Following author has never published a paper", candiName, each)
-                        raise RuntimeError
+                        # raise RuntimeError
+                        continue
+
                     tmp_paper_num = min(len(totalPubs), self.maxPapers)
                     tmpCandiAidPidList = totalPubs[0:tmp_paper_num]
-                    tmpCandiAuthidPidList.append((each, tmpCandiAidPidList))
+                    tmpCandiAuthidPidList.append((each, tmpCandiAidPidList)) #(aid, PidList)
                 allCandiNameAidPid[candiName] = tmpCandiAuthidPidList
+                if not tmpCandiAuthidPidList:
+                    unqualified_unass_paper.append(self.unassCandi[insIndex])
 
             with open(candi_4name_bert_emb_index_path, mode="wb") as f_w:
                 pickle.dump(allCandiNameAidPid, f_w)
                 f_w.close()
+
+            # delete unqualified_unass_paper, their candidate authors' profile are empty
+            # for item in unqualified_unass_paper:
+            #     print('remove unassigned paper', item)
+            #     self.unassCandi.remove(item)
+            # save_json(self.unassCandi, candi_4name_bert_emb_path, 'unass_candi.json')
         else:
             with open(candi_4name_bert_emb_index_path, mode="rb") as f_r:
                 allCandiNameAidPid = pickle.load(f_r)
+
+            # self.unassCandi = load_json(candi_4name_bert_emb_path, 'unass_candi.json')
+
+
+
         # Calculate the paper embedding of each candidate author according to the name and save it as pickle
         # {"candiName": [(Aid, [Pid])]}
         if start_name_index == -1 and end_name_index == -1:
@@ -160,6 +177,10 @@ class ProcessFeature:
 
         current_name_index = 0
         for candiName, aidPidList in allCandiNameAidPid.items():
+            # If all author profile in this name are empty,skip this name
+            if not aidPidList:
+                continue
+
             if current_name_index < start_name_index:
                 current_name_index = current_name_index + 1
                 continue
@@ -181,7 +202,7 @@ class ProcessFeature:
 
                     for pidItem in pidList:
                         current_pid = pidItem
-                        candiPAttrItem, candiPAbstractItem = self.get_paper_attr(pidItem, self.prosInfo)
+                        candiPAttrItem, candiPAbstractItem = self.get_paper_attr(current_pid, self.prosInfo)
                         candiP4BertInputItem = self.get_paper_bert_input(candiPAttrItem, candiPAbstractItem)
 
                         tmp_4aid_pid_list.append(current_pid)
@@ -249,9 +270,12 @@ class ProcessFeature:
                     print("Please Generating Paper Embedding First!")
                     raise RuntimeError
                     exit(-1)
-                with open(tmp_path, mode="rb") as f_r:
-                    candiNameBertEmb = pickle.load(f_r)
-                    CandiNameEmb[candiName] = candiNameBertEmb
+                try:
+                    with open(tmp_path, mode="rb") as f_r:
+                        candiNameBertEmb = pickle.load(f_r)
+                        CandiNameEmb[candiName] = candiNameBertEmb
+                except:
+                    print("can't load candiName Emb: ", candiName)
                 print("load candiName Emb: ", candiName)
         for insIndex in tqdm(range(start, end)):
             unassPid, candiName = self.unassCandi[insIndex]
@@ -263,10 +287,12 @@ class ProcessFeature:
             tmpCandiAuthor = []
 
             tmpCandiAuthPSimi = {}
-            for each in candiAuthors:
+            for each in candiAuthors: #each means aid
                 # print("current process: ", insIndex, each)
                 # [(aid,[(pid, emb)])]
                 candiPBertEmbList = self.get_paper_emb_by_name_aid(candiName, each, CandiNameEmb)
+                if not candiPBertEmbList: #this aid doesn't have emb
+                    continue
 
                 if len(candiPBertEmbList) == 0:
                     print("Author no paper: ", candiName, each)
@@ -341,21 +367,13 @@ def merge_final_simi_pickle(bert_simi_save_path, start_end_index_pair_list, bert
         with open(f'{bert_simi_save_path}bert_simi_{start}_{end}.pkl', mode="rb") as f_r:
             tmp_simi_dict = pickle.load(f_r)
             final_simi_dict.update(tmp_simi_dict)
-    # bert_simi_save_dictory = bert_simi_save_path[0:-4]
-    # bert_simi_save_dictory = bert_simi_save_path
-    # with open(f'{bert_simi_save_dictory}bert_simi_{global_begin}_{global_end}.pkl', mode="wb") as f_w:
-    #     pickle.dump(final_simi_dict, f_w)
     with open(bert_simi_final_save_path, mode="wb") as f_w:
         pickle.dump(final_simi_dict, f_w)
     print("The merging of the simi feature pickle is complete")
 
 
 class OagbertFeatures:
-    def __init__(self, version, raw_data_root = None, processed_data_root = None,bert_feat_root = None):
-        '''
-        1.根据type 配置config
-        2.根据config 配置processFeature
-        '''
+    def __init__(self, version, raw_data_root = None, processed_data_root = None,bert_feat_root = None,device=0):
         self.v2path = version2path(version)
         self.raw_data_root = raw_data_root
         self.processed_data_root = processed_data_root
@@ -410,27 +428,20 @@ class OagbertFeatures:
             }
         #Different configs correspond to different ProcessFeatures
         self.genBertSimiFeat = ProcessFeature(self.config["nameAidPid_path"], self.config["prosInfo_path"],
-                                              self.config["unassCandi_path"], self.config["validUnassPub_path"])
+                                              self.config["unassCandi_path"], self.config["validUnassPub_path"],gpu_device=device)
 
 
 
 
-    def get_oagbert_feature(self):
-        '''
-        3.processFeature 调用get_candi_auth_paper_bert_emb和get_bert_simi_feature
-        4.merge_final_simi_pickle
-        '''
+    def get_oagbert_feature(self,start=-1,end=-1):
         genBertSimiFeat = self.genBertSimiFeat
 
-        start,end = -1,-1
         genBertSimiFeat.get_candi_auth_paper_bert_emb(start, end, self.config["candi_4name_bert_emb_path"])
 
         genBertSimiFeat.get_bert_simi_feature(start, end, self.config["candi_4name_bert_emb_path"],
                                                       self.config["bert_simi_save_path"],
                                                       self.config["bert_simi_final_save_path"])
 
-        # merge_final_simi_pickle(self.config["bert_simi_save_path"], self.config["start_end_index_pair_list"],
-        #                         self.config["bert_simi_final_save_path"])
 
 
 
@@ -450,3 +461,4 @@ if __name__ == "__main__":
     oagbert_features = OagbertFeatures(version)
     oagbert_features.get_oagbert_feature()
     logger.info("Finish Test data")
+

@@ -6,7 +6,12 @@ Unidecode==1.2.0
 pyjarowinkler==1.8
 lightgbm==2.3.0
 scipy==1.9.0
-torch==1.7.1
+torch==1.7.1+cu101
+torch-cluster==1.5.8
+torch-scatter==2.0.5
+torch-spline-conv==1.2.0
+torch-sparse=0.6.8
+torch-geometric==2.1.0
 gensim==3.8.3
 cogdl==0.5.3
 catboost==0.24.4

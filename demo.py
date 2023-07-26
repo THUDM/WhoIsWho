@@ -30,12 +30,9 @@ def generate_feature(version: dict,feature_list: list,type_list: list):
             if feature == 'adhoc':
                 adhoc_features = AdhocFeatures(present_version)
                 adhoc_features.get_hand_feature()
-
             if feature == 'oagbert':
                 oagbert_features = OagbertFeatures(present_version)
                 oagbert_features.get_oagbert_feature()
-
-
             if feature == 'graph':
                 if type == 'train':
                     adhoc_features = AdhocFeatures(present_version, graph_data=True)  # whoiswhograph hand feature

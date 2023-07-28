@@ -3,6 +3,7 @@ import pickle
 import random
 import sys
 import time
+from tqdm import tqdm
 from collections import defaultdict
 import numpy as np
 sys.path.append('../../../')
@@ -90,7 +91,7 @@ class ProcessFeature:
     def getUnassFeat(self):
         tmp = []
         tmpCandi = []
-        for insIndex in range(len(self.unassCandi)):
+        for insIndex in tqdm(range(len(self.unassCandi)),desc='Extracting paper information...'):
             # if insIndex > 30:
             #     break
             unassPid, candiName = self.unassCandi[insIndex]
@@ -113,12 +114,7 @@ class ProcessFeature:
 
 
 class AdhocFeatures:
-    """
-    This class is for generating adhoc features.
-    1. Configure parameters according to dataset type
-    2. Get features
-    """
-    def __init__(self,version, raw_data_root = None, processed_data_root = None,hand_feat_root = None):
+    def __init__(self,version, raw_data_root = None, processed_data_root = None,hand_feat_root = None,graph_data=False):
         self.v2path = version2path(version)
         self.raw_data_root = raw_data_root
         self.processed_data_root = processed_data_root
@@ -126,8 +122,8 @@ class AdhocFeatures:
 
         self.name = self.v2path['name']
         self.task = self.v2path['task'] #RND SND
-        assert self.task == 'RND' , 'This features' \
-                                    'only support RND task'
+        assert self.task == 'RND' , 'Only support RND task'
+
         self.type = self.v2path['type'] #train valid test
 
         #Modifying arguments when calling from outside
@@ -138,7 +134,7 @@ class AdhocFeatures:
         if not hand_feat_root:
             self.hand_feat_root = self.v2path['hand_feat_root']
 
-        # self.data = ret
+
         if self.type == 'train':
             self.config = {
                 'name2aid2pid_path': self.processed_data_root + 'train/offline_profile.json',
@@ -163,7 +159,17 @@ class AdhocFeatures:
                 'unass_candi_path'   : self.processed_data_root + RNDFilePathConfig.unass_candi_v2_path,
                 'unass_pubs_path'    : self.raw_data_root + RNDFilePathConfig.unass_pubs_info_v2_path,
             }
-            self.feat_save_path = self.hand_feat_root + 'pid2aid2hand_feat.onlinev2.pkl'
+
+        if graph_data == True:
+            self.whoiswhograph_extend_processed_data = self.v2path['whoiswhograph_extend_processed_data']
+            self.config = {
+                'name2aid2pid_path': self.whoiswhograph_extend_processed_data + 'train/offline_profile_by_wholeprofile.json',
+                'whole_pub_info_path': self.raw_data_root + RNDFilePathConfig.train_pubs,
+                'unass_candi_path': self.whoiswhograph_extend_processed_data + RNDFilePathConfig.unass_candi_offline_path,
+                'unass_pubs_path': self.raw_data_root + RNDFilePathConfig.train_pubs,
+            }
+            self.feat_save_path = self.hand_feat_root + 'whoiswhograph_pid2aid2hand_feat.offline.pkl'
+
 
         self.genAdhocFeat = ProcessFeature(**self.config)
 
@@ -190,17 +196,17 @@ class AdhocFeatures:
         save_pickle(pid2aid2cb_feat, self.feat_save_path)
 
 if __name__ == '__main__':
-    data, version = load_utils.LoadData(name="v3", type="train", task='RND',download=False)
-    adhoc_features = AdhocFeatures(version)
+    version = {"name": 'v3', "task": 'RND', "type": 'train'}
+    adhoc_features = AdhocFeatures(version,graph_data=True)
     adhoc_features.get_hand_feature()
     logger.info("Finish Train data")
 
-    data, version = load_utils.LoadData(name="v3", type="valid", task='RND',download=False)
+    version = {"name": 'v3', "task": 'RND', "type": 'valid'}
     adhoc_features = AdhocFeatures(version)
     adhoc_features.get_hand_feature()
     logger.info("Finish Valid data")
 
-    data, version = load_utils.LoadData(name="v3", type="test", task='RND', download=False)
+    version = {"name": 'v3', "task": 'RND', "type": 'test'}
     adhoc_features = AdhocFeatures(version)
     adhoc_features.get_hand_feature()
     logger.info("Finish Test data")

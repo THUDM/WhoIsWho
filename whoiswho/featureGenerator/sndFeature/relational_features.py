@@ -4,17 +4,17 @@ import random
 from sklearn.metrics.pairwise import pairwise_distances
 import numpy as np
 from gensim.models import word2vec
-
+from collections import defaultdict
 from whoiswho.config import version2path
 
 class MetaPathGenerator:
     def __init__(self):
-        self.paper_author = dict()
-        self.author_paper = dict()
-        self.paper_org = dict()
-        self.org_paper = dict()
-        self.paper_conf = dict()
-        self.conf_paper = dict()
+        self.paper_author = defaultdict(list)
+        self.author_paper = defaultdict(list)
+        self.paper_org = defaultdict(list)
+        self.org_paper = defaultdict(list)
+        self.paper_conf = defaultdict(list)
+        self.conf_paper = defaultdict(list)
 
     def read_data(self, dirpath):
         temp = set()
@@ -26,11 +26,7 @@ class MetaPathGenerator:
             toks = line.strip().split("\t")
             if len(toks) == 2:
                 p, a = toks[0], toks[1]
-                if p not in self.paper_org:
-                    self.paper_org[p] = []
                 self.paper_org[p].append(a)
-                if a not in self.org_paper:
-                    self.org_paper[a] = []
                 self.org_paper[a].append(p)
         temp.clear()
 
@@ -41,11 +37,7 @@ class MetaPathGenerator:
             toks = line.strip().split("\t")
             if len(toks) == 2:
                 p, a = toks[0], toks[1]
-                if p not in self.paper_author:
-                    self.paper_author[p] = []
                 self.paper_author[p].append(a)
-                if a not in self.author_paper:
-                    self.author_paper[a] = []
                 self.author_paper[a].append(p)
         temp.clear()
 
@@ -56,11 +48,7 @@ class MetaPathGenerator:
             toks = line.strip().split("\t")
             if len(toks) == 2:
                 p, a = toks[0], toks[1]
-                if p not in self.paper_conf:
-                    self.paper_conf[p] = []
                 self.paper_conf[p].append(a)
-                if a not in self.conf_paper:
-                    self.conf_paper[a] = []
                 self.conf_paper[a].append(p)
         temp.clear()
 
@@ -151,18 +139,19 @@ class RelationalFeatures:
         self.w2v_window = w2v_window
 
         if not processed_data_root:
-            # self.raw_data_root = '../../dataset/' + self.v2path['raw_data_root']
             self.processed_data_root =  self.v2path['processed_data_root']
 
     def cal_relational_similarity(self, pubs, name, mode, add_a, add_o, add_v):
         mpg = MetaPathGenerator()
+        # load relations
         mpg.read_data(join(self.processed_data_root, 'relations', mode, name))
         all_embs = []
-        cp = set()
+        rel_outliers = set()
         for k in range(self.repeat_num):
             rw_path = join(self.processed_data_root, 'rw_path', mode)
             os.makedirs(rw_path, exist_ok=True)
             rw_file = join(rw_path, 'RW.txt')
+            # write random walk path
             mpg.generate_WMRW(rw_file, self.num_walk, self.walk_len, add_a, add_o, add_v)
             sentences = word2vec.Text8Corpus(rw_file)
             model = word2vec.Word2Vec(sentences, size=self.rw_dim, negative=self.w2v_neg,
@@ -173,7 +162,7 @@ class RelationalFeatures:
                     embs.append(model[pid])
                 else:
                     embs.append(np.zeros(100))
-                    cp.add(i)
+                    rel_outliers.add(i)
             all_embs.append(embs)
         all_embs = np.array(all_embs)
 
@@ -182,4 +171,4 @@ class RelationalFeatures:
             sk_dis = sk_dis + pairwise_distances(all_embs[k], metric="cosine")
         sk_dis = sk_dis / self.repeat_num
 
-        return sk_dis, cp
+        return sk_dis, rel_outliers

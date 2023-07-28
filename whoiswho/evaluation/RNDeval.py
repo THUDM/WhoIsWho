@@ -1,18 +1,15 @@
 from whoiswho.utils import load_json, save_json
 
-#evaluation
-def evaluate(assignment,ground_truth,type):
-    if isinstance(assignment, str):
-        assignment=load_json(assignment)
+def evaluate(predict_result,ground_truth):
+    if isinstance(predict_result, str):
+        predict_result=load_json(predict_result)
     if isinstance(ground_truth, str):
         ground_truth=load_json(ground_truth)
 
-    submit_data=assignment
-
+    submit_data=predict_result
     result_list = []
     total_paper = 0
 
-    # ground_truth 三级结构
     for name, authors in ground_truth.items():
         for a_id, papers in authors.items():
             predict_paper = set(submit_data.get(a_id, []))
@@ -29,7 +26,6 @@ def evaluate(assignment,ground_truth,type):
             total_paper += len(gt_papers)
 
     # calculate weighted-f1
-
     weighted_precision = 0
     weighted_recall = 0
     weighted_f1 = 0
@@ -49,6 +45,7 @@ def evaluate(assignment,ground_truth,type):
     return weighted_f1
 
 if __name__ == '__main__':
-    assignment = load_json('../training/result/result.valid.json')
-    ground_truth = load_json('/home/hantianyi/whoiswho_dev/whoiswho/dataset/data/v3/RND/valid/cna_valid_ground_truth.json')
-    evaluate(assignment,ground_truth)
+    predict_result = load_json('Input the path of result.valid.json')
+
+    ground_truth = load_json('Input the path of cna_valid_ground_truth.json')
+    evaluate(predict_result,ground_truth)

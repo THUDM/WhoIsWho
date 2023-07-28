@@ -23,8 +23,7 @@ import sys,os
 from whoiswho.config import paper_idf_path
 
 np.set_printoptions(suppress=True)
-num_thread = int(multiprocessing.cpu_count() / 2)
-
+num_processing = int(multiprocessing.cpu_count() / 2)
 
 class featureGeneration:
     def __init__(self):
@@ -33,7 +32,7 @@ class featureGeneration:
     def __loadEssential(self):
 
         data_dir = os.path.abspath(paper_idf_path)
-        print(data_dir)
+        print("tf-idf file path:",data_dir)
         with open(data_dir + '/name_uniq_dict.json', "r") as file:
             self.name_uniq_dict = json.load(file)
         with open(data_dir + '/venue_idf.json', "r") as file:
@@ -173,12 +172,12 @@ class featureGeneration:
             # print("2:", new_name)
         return new_name.strip()
 
-    def get_name_uniq(self, name_c):  # 将名字的各个部分的得分算出来
+    def get_name_uniq(self, name_c):
         name_rareness = 0.0
         if name_c:
             name_c = name_c.lower().split()
             for seg in name_c:
-                s = self.name_uniq_dict.get(seg.strip(" "), 10)  # 未找到返回 10
+                s = self.name_uniq_dict.get(seg.strip(" "), 10)
                 name_rareness += s
         return name_rareness
 
@@ -198,16 +197,18 @@ class featureGeneration:
 
     def multi_process_data(self, total_ins):
         function = self.atomic_process
-        print('num_thread', num_thread)
-        pool = multiprocessing.Pool(num_thread)
-        multi_res = pool.map(function, total_ins)
+        print('num_processing:', num_processing)
+        print('Please be patient while it is being processed...')
+        pool = multiprocessing.Pool(num_processing)
+        multi_res = pool.map(function, total_ins)  #multi_res：（ index, (res, coauthor_ratio) ）
         pool.close()
         pool.join()
-        sorted_res = sorted(multi_res, key=itemgetter(0))  # 保证结果的有序
+        print('finish multiprocessing!')
+        sorted_res = sorted(multi_res, key=itemgetter(0))
         re_res = []
         for each in sorted_res:
             _index, feas = each
-            re_res.append(feas)
+            re_res.append(feas)  #(res, coauthor_ratio)
         return re_res
 
     def normalize(self, total_ratio):
@@ -225,29 +226,16 @@ class featureGeneration:
         # if(maxs)
 
     def atomic_process(self, each_ins):
-        ''' 处理每个实例
-
-        Args:
-            each_ins: tuple(instance_ids, List[instance]). List[instance] 前若干个为负例，最后一个为正例. \
-                    instance: tuple(paper_info, List[paper_info]), List[paper_info] 为 profile 中某个人所有 paper 的特征. \
-                    paper_info: List[(set(coauthor name), org_str, venue, keywords_str, title)]
-
-        Returns:
-            index, (res, coauthor_ratio)
-        '''
-        # pid_list = []
         res = []
         total_ratio = []
         # print(len(each_ins))
         # exit()
         index, data = each_ins
-        for ins in data:  # 处理每个候选者的信息
-            tmp, ratios = self.process_ranking_feature(ins)
-            res.append(tmp)
+        for ins in data:  #ins: (unassAttr, candiAttrList)
+            feature, ratios = self.process_ranking_feature(ins)
+            res.append(feature)
             total_ratio.append(ratios)
-            # pid_list.append(pid)
-        # print(ins[0])
-        # exit()
+
         coauthor_ratio = self.normalize(total_ratio)
         return index, (res, coauthor_ratio)
 
@@ -255,21 +243,17 @@ class featureGeneration:
         '''
 
         Args:
-            ins: tuple(`paper_info`, List[`paper_info`]), List[`paper_info`] 为 profile 中某个人所有 paper 的特征. \
-                    paper_info: List[(set(coauthor name), org_str, venue, keywords_str, title)]
+            ins: tuple(`paper_info`, List[`paper_info`]),
+            List[`paper_info`] the characteristics of all the papers of an individual in the profile.
+            paper_info: List[(set(coauthor name), org_str, venue, keywords_str, title)]
 
         Returns:
 
         '''
         paper_attr, author_paper_attr_list = ins
         features = []
-        name2clean = {}  # 将名字映射为干净的名字
-        # print(paper_attr)
+        name2clean = {}
         paper_names, paper_org, paper_venue, paper_keywords, paper_title = paper_attr
-        # (name_info, org_str, venue, keywords_str, semantic_str)
-        # MatchName(data["name"], data["names"], True)
-        # cleaned_paper_names =
-        # print(len(paper_names))
         paper_names = list(paper_names)[:50]
 
         # Process names
@@ -278,11 +262,11 @@ class featureGeneration:
             if each not in name2clean:
                 name2clean[each] = tmp_clean
 
-        candiauthor2int = defaultdict(int)  # 统计和每个共同作者的共同论文数
-        candiorgs = []  # 所有曾使用的机构信息
+        candiauthor2int = defaultdict(int)
+        candiorgs = []
         candivenues = []
         candititles = []
-        candikeywords = []  # 关键词信息，每个关键词条目通过将一篇论文的所有关键词拼接在一起得到
+        candikeywords = []
         candiyears = []
         author_papers = len(author_paper_attr_list)
 
@@ -291,7 +275,7 @@ class featureGeneration:
         for each in author_paper_attr_list:
             each_names, each_org, each_venue, each_keywords, each_title = each
             # collect name
-            each_names = list(each_names)[:50]  # 取最多50个共同作者
+            each_names = list(each_names)[:50]
             for each in each_names:
                 tmp_clean = self.clean_name(each)
                 candiauthor2int[tmp_clean] += 1
@@ -322,7 +306,7 @@ class featureGeneration:
             # features.extend([-999] * 12)
             features.extend([0.0] * 4)
         else:
-            coauthors = set()  # 统计出出现过的共同作者集合
+            coauthors = set()
             for each_names in filter_author_names:
                 # each_names, each_org, each_venue, each_keywords, each_title = each
                 each_coauthors = MatchName(paper_names, each_names, name2clean, True)
@@ -330,13 +314,13 @@ class featureGeneration:
             coauthor_tfidf = 0.0
             counted_coauthor_tfidf = 0.0
             for each in coauthors:
-                name_score = self.get_name_uniq(each)  # 获取每个名字权值得分，将名字切分，再算出每部分的得分之和
+                name_score = self.get_name_uniq(each)
                 coauthor_tfidf += name_score
                 counted_coauthor_tfidf += candiauthor2int.get(each, 1) * name_score
 
             paper_tfidf = 0.0
             for each in paper_names:
-                name_score = self.get_name_uniq(name2clean[each])  # 获取每个名字权值得分，将名字切分，再算出每部分的得分之和
+                name_score = self.get_name_uniq(name2clean[each])
                 paper_tfidf += name_score
 
             author_tfidf = 0.0

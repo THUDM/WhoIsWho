@@ -101,7 +101,7 @@ def dump_features_relations_to_file(raw_data_root,processed_data_root):
         except:
             continue
 
-        for n, name in enumerate(tqdm(raw_pubs)):
+        for n, name in enumerate(tqdm(raw_pubs)): #author name
             file_path = os.path.join(processed_data_root, 'relations', mode, name)
             os.makedirs(file_path, exist_ok=True)
             coa_file = open(os.path.join(file_path, 'paper_author.txt'), 'w', encoding='utf-8')
@@ -132,13 +132,14 @@ def dump_features_relations_to_file(raw_data_root,processed_data_root):
                     cot_file.write(pid + '\t' + word + '\n')
 
                 # Save keywords
+                keyword = ""
                 word_list = []
                 if "keywords" in pub:
                     for word in pub["keywords"]:
                         word_list.append(word)
                     pstr = " ".join(word_list)
                     pstr = re.sub(' +', ' ', pstr)
-                keyword = pstr
+                    keyword = pstr
 
                 # Save org (relations)
                 org = ""
@@ -240,7 +241,6 @@ def dump_plain_texts_to_file(raw_data_root,processed_data_root):
     wf = codecs.open(os.path.join(texts_dir, 'plain_text.txt'), 'w', encoding='utf-8')
     r = '[!“”"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~—～’]+'
 
-    authorname_dict = {}
 
     for i, pid in enumerate(tqdm(pubs_dict)):
         paper_features = []
@@ -255,14 +255,15 @@ def dump_plain_texts_to_file(raw_data_root,processed_data_root):
         title_features = pstr
 
         # Save keywords
+        keywd_features = ""
         word_list = []
         if "keywords" in pub:
             for word in pub["keywords"]:
                 word_list.append(word)
             pstr = " ".join(word_list)
-        keywd_features = pstr
+            keywd_features = pstr
 
-        author_name_list = []
+        org_list = []
         for author in pub["authors"]:
             # Save org (every author's organization)
             if "org" in author:
@@ -271,29 +272,12 @@ def dump_plain_texts_to_file(raw_data_root,processed_data_root):
                 pstr = pstr.lower()
                 pstr = re.sub(r, ' ', pstr)
                 pstr = re.sub(r'\s{2,}', ' ', pstr).strip()
-                org_features = pstr
+                if pstr:
+                    org_list.append(pstr)
 
-            # Save author-name (every name)
-            if "name" in author:
-                authorname = "".join(filter(str.isalpha, author['name'])).lower()
-                token = authorname.split(" ")
 
-                if len(token) == 2:
-                    authorname = token[0] + token[1]
-                    authorname_reverse = token[1] + token[0]
-
-                    if authorname not in authorname_dict:
-                        if authorname_reverse not in authorname_dict:
-                            authorname_dict[authorname] = 1
-                        else:
-                            authorname = authorname_reverse
-                else:
-                    authorname = authorname.replace(" ", "")
-
-                author_name_list.append(authorname)
-
-        pstr = " ".join(author_name_list)
-        authorname_features = pstr
+        pstr = " ".join(org_list)
+        org_features = pstr
 
         # Save venue
         if "venue" in pub and type(pub["venue"]) is str:
@@ -315,7 +299,7 @@ def dump_plain_texts_to_file(raw_data_root,processed_data_root):
             abstract_features = pstr
 
         paper_features.append(
-            authorname_features + org_features + title_features + keywd_features +
+            org_features + title_features + keywd_features +
             venue_features + abstract_features
         )
         wf.write(' '.join(paper_features) + '\n')
@@ -688,9 +672,9 @@ def processdata_RND(version: dict,train_data: list = []):
 
 
 if __name__ == '__main__':
-    train, version = load_utils.LoadData(name="v3", type="train", task='RND')
-    processdata_RND(train,version)
+    # train, version = load_utils.LoadData(name="v3", type="train", task='RND')
+    # processdata_RND(version=version)
 
-    # train, version = load_utils.LoadData(name="v3", type="train", task='SND')
-    # processdata_SND(train,version)
+    version = load_utils.LoadData(name="v3", type="train", task='SND',just_version=True)
+    processdata_SND(version=version)
 

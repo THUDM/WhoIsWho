@@ -242,7 +242,19 @@ python graph_model.py
 
 
 
+## Citation
 
+If you find our work useful, please consider citing the following paper. 
+
+```
+@article{chen2023web,
+  title={Web-Scale Academic Name Disambiguation: the WhoIsWho Benchmark, Leaderboard, and Toolkit},
+  author={Chen, Bo and Zhang, Jing and Zhang, Fanjin and Han, Tianyi and Cheng, Yuqing and Li, Xiaoyan and Dong, Yuxiao and Tang, Jie},
+  booktitle={Proceedings of the 29th ACM SIGKDD International Conference on Knowledge Discovery & Data Mining},
+  pages={3817-3828}
+  year={2023}
+}
+```
 
 
 

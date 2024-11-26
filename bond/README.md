@@ -65,3 +65,15 @@ The output will be stored in 'bond/out'. To evaluate, please upload your result 
     torch-geometric==2.2.0
     tqdm==4.65.0
 ```
+
+## References
+🌟 If you find our work helpful, please leave us a star and cite our paper.
+```
+@inproceedings{cheng2024bond,
+  title={BOND: Bootstrapping From-Scratch Name Disambiguation with Multi-task Promoting},
+  author={Cheng, Yuqing and Chen, Bo and Zhang, Fanjin and Tang, Jie},
+  booktitle={Proceedings of the ACM on Web Conference 2024},
+  pages={4216--4226},
+  year={2024}
+}
+```

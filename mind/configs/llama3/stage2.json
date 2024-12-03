@@ -1,0 +1,40 @@
+{
+    "model_name_or_path":"LLM-Research/Meta-Llama-3-8B",
+    "ptm_model_path":"roberta",
+    "author_data":"data/IND-WhoIsWho/train_author.json",
+    "pub_data":"data/IND-WhoIsWho/pid_to_info_all.json",
+    "eval_data":"data/IND-WhoIsWho/ind_valid_author.json",
+    "output_dir": "output/llama3/stage2",
+    "run_name": "stage2",
+    "preprocessing_num_workers": 20,
+    "lora_rank": 8,
+    "lora_alpha": 16,
+    "lora_dropout": 0.05,
+    "max_source_length": 8192,
+    "per_device_train_batch_size": 1,
+    "per_device_eval_batch_size": 1,
+    "gradient_accumulation_steps": 16,
+    
+    "enable_llm_requires_grad": false,
+    "lora_ckpt_path": "output/llama3/stage1",
+    
+    "use_emb": true,
+    "enable_text_proj_requires_grad": true,
+    "text_proj": "linear",
+    "text_feature": "all",
+
+    "num_train_epochs": 10,
+    "warmup_ratio": 0,
+    "lr_scheduler_type": "constant",
+    "learning_rate": 5e-5,
+
+    "feature": "title",
+    "use_chat_template": false,
+
+    "bf16": true,
+    "seed": 42,
+    "save_steps": 20,
+    "eval_steps": 20,
+    "save_only_model": true,
+    "deepspeed": "configs/ds_zero_1.json"
+}

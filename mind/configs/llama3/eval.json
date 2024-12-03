@@ -1,0 +1,37 @@
+{
+    "model_name_or_path":"LLM-Research/Meta-Llama-3-8B",
+    "author_data":"data/IND-WhoIsWho/train_author.json",
+    "pub_data":"data/IND-WhoIsWho/pid_to_info_all.json",
+    "eval_data":"data/IND-WhoIsWho/ind_valid_author.json",
+    "output_dir":"output/predict",
+
+    "preprocessing_num_workers": 20,
+    "lora_rank":8,
+    "lora_alpha":16,
+    "lora_dropout":0.05,
+
+    "enable_llm_requires_grad": true,
+    "lora_ckpt_path":"",
+
+    "use_emb":true,
+    "text_proj_ckpt_path": "",
+    "text_feature":"author_org_venue",
+    "enable_text_proj_requires_grad":false,
+    "text_proj":"linear",
+    "use_oagbert":false,
+
+    "shuffle_profile":false,
+    "use_graph":true,
+    "enable_graph_proj_requires_grad":false,
+    "graph_proj_ckpt_path":"",
+
+    "max_source_length":8192,
+    "per_device_train_batch_size":1,
+    "per_device_eval_batch_size":1,
+    "gradient_accumulation_steps":16,
+    "warmup_ratio":0,
+    "num_train_epochs":4,
+    "lr_scheduler_type": "constant",
+    "bf16":true,
+    "deepspeed":"configs/ds_zero_1.json"
+}

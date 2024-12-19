@@ -11,6 +11,3 @@ NUM_GPUS=8
 torchrun --standalone --nnodes=1 --nproc_per_node=$NUM_GPUS  pipeline_for_multimodal.py \
     configs/llama3/stage2.json 2>&1 | tee output/llama3/stage2.log
 
-
-# torchrun --standalone --nnodes=1 --nproc_per_node=$NUM_GPUS  pipeline_for_multimodal.py \
-#     configs/base/llama3/author.json 2>&1 | tee output/base/llama3/author.log

@@ -5,7 +5,7 @@
 This project leverages a multi-modal structural-enhanced language model for effective incorrect assignment detection. We supply detailed instructions below for setting up the environment, downloading the necessary models and datasets, running training scripts, and evaluating the models.
 
 <p align="center">
-📃 <a href="需要补充arxiv地址" target="_blank"> Paper </a> 
+📃 <a href="https://arxiv.org/abs/2412.03930" target="_blank"> Paper </a> 
 🤖 <a href="https://www.modelscope.cn/models/canalpang/MIND-lora" target="_blank"> Model Parameters </a> 
 💻 <a href="https://github.com/pangaass/M-IND" target="_blank"> GitHub </a>
 </p>
@@ -21,9 +21,10 @@ conda create -n mind python==3.10
 conda activate mind
 
 # Navigate to the current directory
-cd ./M-IND
+cd ./mind
 
 # Install required packages
+# CUDA environment 12.3
 pip install -r requirements.txt
 ```
 
@@ -86,9 +87,12 @@ bash script/eval.sh
 
 ## Citation
 ```
-@artical{pang2024mind,
-      title={MIND: Effective Incorrect Assignment Detection through a Multi-Modal Structural-Enhanced Language Model}, 
-      author={},
-      journal={arXiv preprint arXiv:},
+@article{pang2024mindeffectiveincorrectassignment,
+      title={MIND: Effective Incorrect Assignment Detection through a Multi-Modal Structure-Enhanced Language Model}, 
+      author={Yunhe Pang and Bo Chen and Fanjin Zhang and Yanghui Rao and Jie Tang},
       year={2024},
+      eprint={2412.03930},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/2412.03930}, 
 }

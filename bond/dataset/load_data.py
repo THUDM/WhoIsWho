@@ -16,6 +16,11 @@ def load_data(rfname):
         return pickle.load(rf)
 
 
+def dump_data(obj, wfname):
+    with open(wfname, 'wb') as wf:
+        pickle.dump(obj, wf)
+       
+        
 def load_json(rfname):
     with codecs.open(rfname, 'r', encoding='utf-8') as rf:
         return json.load(rf)

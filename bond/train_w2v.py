@@ -208,8 +208,8 @@ if __name__ == "__main__":
     
     ft_dim = 256
     
-    # dump_corpus()
-    # train_w2v_model(ft_dim)
+    dump_corpus()
+    train_w2v_model(ft_dim)
     dump_paper_emb(model_name=f"w2v_{ft_dim}", ft_dim=ft_dim)
     
     print('done', datetime.now()-start_time)

@@ -1,7 +1,7 @@
 # BOND
 This repository contains the source code of paper "BOND: Bootstrapping From-Scratch Name Disambiguation with Multi-task Promoting".
 
-![Overview](/Bond.png)
+<img src="Bond.png" alt="shot" style="zoom:50%;" />
 
 ## Usage
 

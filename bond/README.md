@@ -51,6 +51,26 @@ def pipeline(model):
 
 The output will be stored in 'bond/out'. To evaluate, please upload your result to http://whoiswho.biendata.xyz/#/.
 
+
+### (Optional) Generate node embeddings
+
+To initialize graph nodes with embeddings, a **pretrained embedding** is provided above. Alternatively, you can generate custom **Word2Vec embeddings** by training a model on the dataset.  
+
+Run the following commands to preprocess the dataset and train the model:  
+
+```bash
+python dataset/preprocess_SND.py 
+python train_w2v.py
+```
+
+Once training is complete, the embeddings will be saved at:
+
+```
+dataset/data/paper_emb
+```
+
+You can then use these embeddings to initialize your graph.
+
 ## Implementation requirements
 
 ```
